@@ -1,113 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Crypto Arbitrage Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .card-title {
+            font-weight: 600;
+        }
+        .price-value {
+            font-size: 1.4rem;
+            font-weight: bold;
+        }
+        #settings-form {
+            max-width: 700px;
+        }
+    </style>
 </head>
-<body class="bg-light">
-    <div class="container py-4">
-        <h2 class="mb-4 text-center">💰 Crypto Arbitrage Dashboard</h2>
+<body>
+<div class="container py-4">
+    <h2 class="text-center mb-4">💰 Crypto Arbitrage Dashboard</h2>
 
-        <!-- Prices Panel -->
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Bitcoin (BTC)</h5>
-                        <p class="card-text" id="btc-price">Loading...</p>
+    <!-- Settings Form -->
+    <div class="card mb-4 mx-auto" id="settings-form">
+        <div class="card-body">
+            <form method="POST" action="/settings">
+                <div class="row mb-3">
+                    <div class="col">
+                        <label for="stake" class="form-label">Stake ($)</label>
+                        <input type="number" step="0.01" name="stake" id="stake" class="form-control" value="{{ settings.stake }}">
+                    </div>
+                    <div class="col">
+                        <label for="target_profit" class="form-label">Target Profit (%)</label>
+                        <input type="number" step="0.1" name="target_profit" id="target_profit" class="form-control" value="{{ settings.target_profit }}">
                     </div>
                 </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Ethereum (ETH)</h5>
-                        <p class="card-text" id="eth-price">Loading...</p>
+                <div class="row mb-3">
+                    <div class="col">
+                        <label for="max_trades" class="form-label">Max Trades</label>
+                        <input type="number" name="max_trades" id="max_trades" class="form-control" value="{{ settings.max_trades }}">
+                    </div>
+                    <div class="col">
+                        <label for="cooldown" class="form-label">Cooldown (min)</label>
+                        <input type="number" name="cooldown" id="cooldown" class="form-control" value="{{ settings.cooldown }}">
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Settings Panel -->
-        <div class="card mb-4">
-            <div class="card-header">⚙️ Settings</div>
-            <div class="card-body">
-                <form id="settings-form">
-                    <div class="row g-3">
-                        <div class="col-md-2">
-                            <label class="form-label">Stake ($)</label>
-                            <input type="number" step="0.01" min="1" name="stake" class="form-control" required>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Target Profit (%)</label>
-                            <input type="number" step="0.01" min="0" name="target_profit" class="form-control" required>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Max Trades</label>
-                            <input type="number" min="1" name="max_trades" class="form-control" required>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Cooldown (s)</label>
-                            <input type="number" min="1" name="cooldown" class="form-control" required>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Reinvest</label>
-                            <select name="reinvest" class="form-select">
-                                <option value="true">Yes</option>
-                                <option value="false">No</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button type="submit" class="btn btn-primary w-100">💾 Save</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- Graph and Controls -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>📈 Performance Chart</span>
-                <div>
-                    <select id="chartType" class="form-select form-select-sm d-inline-block w-auto me-2">
-                        <option value="profit">Profit</option>
-                        <option value="capital">Capital</option>
-                        <option value="trade_count">Trade Count</option>
-                    </select>
-                    <button id="toggleLive" class="btn btn-sm btn-outline-success me-2">Live</button>
-                    <button id="togglePaper" class="btn btn-sm btn-outline-secondary">Paper</button>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" name="reinvest" id="reinvest" {% if settings.reinvest %}checked{% endif %}>
+                    <label class="form-check-label" for="reinvest">Reinvest Profits</label>
                 </div>
-            </div>
-            <div class="card-body">
-                <canvas id="performanceChart" height="100"></canvas>
-            </div>
-        </div>
-
-        <!-- Backtest Button -->
-        <div class="text-center mb-5">
-            <button class="btn btn-outline-warning" id="runBacktest">🔁 Run Backtest</button>
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+                <a href="/backtest" class="btn btn-secondary ms-2">Run Backtest</a>
+            </form>
         </div>
     </div>
 
-    <script>
-        // Preload BTC and ETH Prices
-        async function fetchPrices() {
-            try {
-                const res = await fetch('/prices');
-                const data = await res.json();
-                document.getElementById('btc-price').innerText = `$${data.bitcoin}`;
-                document.getElementById('eth-price').innerText = `$${data.ethereum}`;
-            } catch (err) {
-                document.getElementById('btc-price').innerText = 'Error';
-                document.getElementById('eth-price').innerText = 'Error';
-            }
-        }
+    <!-- Prices Section -->
+    <div class="row text-center mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Bitcoin (BTC)</h5>
+                    <p class="price-value" id="btc-price">Loading...</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Ethereum (ETH)</h5>
+                    <p class="price-value" id="eth-price">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        // Load Settings
-        async function preloadSettings() {
-            const res = await fetch('/get_settings');
-            const settings = await res.json();
+    <!-- Growth Chart -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">📈 Performance Chart</h5>
+            <canvas id="growthChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    async function fetchPrices() {
+        try {
+            const response = await fetch("/prices");
+            const data = await response.json();
+            document.getElementById("btc-price").textContent = "$" + data.bitcoin;
+            document.getElementById("eth-price").textContent = "$" + data.ethereum;
+        } catch (err) {
+            document.getElementById("btc-price").textContent = "Error";
+            document.getElementById("eth-price").textContent = "Error";
+        }
+    }
+    fetchPrices();
+    setInterval(fetchPrices, 60000);
+
+    // Chart load
+    fetch("/real_growth")
+        .then(res => res.json())
+        .then(data => {
+            const ctx = document.getElementById("growthChart").getContext("2d");
+            new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: data.timestamps,
+                    datasets: [
+                        {
+                            label: "Capital ($)",
+                            data: data.capital,
+                            borderColor: "#007bff",
+                            fill: false
+                        },
+                        {
+                            label: "Profit ($)",
+                            data: data.profit,
+                            borderColor: "#28a745",
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: "top"
+                        }
+                    }
+                }
+            });
+        });
+</script>
+</body>
+</html>
