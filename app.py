@@ -165,6 +165,9 @@ def update_settings():
     data = request.get_json()
     save_settings(data)
     return jsonify({'status': 'success'})
+from dotenv import load_dotenv
+load_dotenv()
+
 
 @app.route('/get_settings')
 def get_settings():
