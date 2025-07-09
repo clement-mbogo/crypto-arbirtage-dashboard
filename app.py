@@ -10,14 +10,12 @@ import requests
 from dotenv import load_dotenv
 load_dotenv()
 
-
 # === CONFIGURATION ===
 SETTINGS_FILE = 'settings.json'
 DB_FILE = 'trades.db'
-API_URL = 'https://api.coingecko.com/api/v3/simple/price'
-PAIRS = ['BTC', 'ETH']
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
+PAIRS = ['BTC', 'ETH']
 
 # === LOAD/INIT SETTINGS ===
 def load_settings():
@@ -64,9 +62,32 @@ bot_running = False
 bot_thread = None
 
 # === PRICE FETCHING ===
-def get_prices():
+def fetch_binance_prices():
     try:
-        result = requests.get(API_URL, params={
+        res = requests.get('https://api.binance.com/api/v3/ticker/price?symbols=["BTCUSDT","ETHUSDT"]').json()
+        return {
+            'BTC': float([x for x in res if x['symbol'] == 'BTCUSDT'][0]['price']),
+            'ETH': float([x for x in res if x['symbol'] == 'ETHUSDT'][0]['price'])
+        }
+    except:
+        return {'BTC': 0, 'ETH': 0}
+
+def fetch_kucoin_prices():
+    try:
+        res = requests.get('https://api.kucoin.com/api/v1/market/allTickers').json()
+        tickers = res['data']['ticker']
+        btc = next(item for item in tickers if item['symbolName'] == 'BTC-USDT')
+        eth = next(item for item in tickers if item['symbolName'] == 'ETH-USDT')
+        return {
+            'BTC': float(btc['last']),
+            'ETH': float(eth['last'])
+        }
+    except:
+        return {'BTC': 0, 'ETH': 0}
+
+def fetch_coingecko_prices():
+    try:
+        result = requests.get('https://api.coingecko.com/api/v3/simple/price', params={
             'ids': 'bitcoin,ethereum',
             'vs_currencies': 'usd'
         }).json()
@@ -76,14 +97,21 @@ def get_prices():
         }
     except:
         return {'BTC': 0, 'ETH': 0}
-from flask import redirect  # make sure this is imported at the top
+
+def get_prices():
+    return {
+        'coingecko': fetch_coingecko_prices(),
+        'binance': fetch_binance_prices(),
+        'kucoin': fetch_kucoin_prices()
+    }
+
+from flask import redirect
 
 @app.route('/prices')
 def prices_alias():
     return redirect('/get_prices')
 
-
-# === TELEGRAM ALERT (OPTIONAL) ===
+# === TELEGRAM ALERT ===
 def send_telegram_alert(message):
     try:
         token = os.getenv("TG_BOT_TOKEN") or "your_bot_token"
@@ -99,14 +127,13 @@ def run_bot():
     global bot_running
     while bot_running:
         settings = load_settings()
-        prices = get_prices()
+        prices = get_prices()['binance']
         coin = settings['pair']
         price = prices.get(coin, 0)
         if price == 0:
             time.sleep(settings['cooldown'])
             continue
 
-        # Random spread simulation
         spread = round(random.uniform(0.5, 2.5), 2)
         if spread >= settings['target_profit']:
             profit = round((spread / 100) * settings['stake'], 2)
@@ -115,7 +142,7 @@ def run_bot():
             cur = conn.cursor()
             cur.execute('''INSERT INTO trades (timestamp, pair, buy_exchange, sell_exchange, buy_price, sell_price, profit)
                            VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                        (now, coin, "Binance", "Kraken",
+                        (now, coin, "Binance", "KuCoin",
                          price * (1 - spread / 200),
                          price * (1 + spread / 200),
                          profit))
@@ -125,17 +152,13 @@ def run_bot():
         time.sleep(settings['cooldown'])
 
 # === ROUTES ===
-
 @app.route('/')
 def index():
     if not session.get("user"):
         return redirect(url_for('login'))
     settings = load_settings()
     prices = get_prices()
-    return render_template('dashboard.html',
-                           prices=prices,
-                           settings=settings,
-                           pairs=PAIRS)
+    return render_template('dashboard.html', prices=prices, settings=settings, pairs=PAIRS)
 
 @app.route('/update_settings', methods=['POST'])
 def update_settings():
@@ -160,6 +183,27 @@ def get_trades():
     rows = cur.fetchall()
     conn.close()
     return jsonify([dict(row) for row in rows])
+
+@app.route('/get_chart_data')
+def get_chart_data():
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+    cur.execute("SELECT timestamp, profit FROM trades ORDER BY timestamp")
+    rows = cur.fetchall()
+    data = []
+    capital = 0
+    total_profit = 0
+    for idx, row in enumerate(rows):
+        profit = row[1]
+        capital += profit
+        total_profit += profit
+        data.append({
+            'timestamp': row[0],
+            'capital': round(capital, 2),
+            'profit': round(profit, 2),
+            'trade_count': idx + 1
+        })
+    return jsonify(data)
 
 @app.route('/start_bot')
 def start_bot():
@@ -200,18 +244,15 @@ def real_growth():
     capital = 0
     for row in rows:
         capital += row[1]
-        data.append({'timestamp': row[0], 'capital': round(capital, 2)})
+        data.append(round(capital, 2))
     return jsonify(data)
 
 @app.route('/backtest', methods=['POST'])
 def backtest():
-    # Stub for backtest logic
     return jsonify({'status': 'ok', 'message': 'Backtest completed (placeholder)'})
 
-# === AUTH ROUTES (stub for now, assumed implemented elsewhere) ===
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # Assume session auth already handled
     session['user'] = 'admin'
     return redirect(url_for('index'))
 
@@ -220,6 +261,5 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# === MAIN ===
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
