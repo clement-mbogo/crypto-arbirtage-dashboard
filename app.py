@@ -1,40 +1,65 @@
-from flask import Flask, render_template, request, jsonify
-import requests
+from flask import Flask, render_template, jsonify, request
 import json
+import random
+import requests
 import os
 
 app = Flask(__name__)
 
-@app.route("/")
-def home():
-    return render_template("dashboard.html")
+SETTINGS_FILE = 'settings.json'
+TRADE_FILE = 'trades.json'
 
-@app.route("/prices")
+# Utility Functions
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE) as f:
+            return json.load(f)
+    return {
+        "stake": 5,
+        "target_profit": 5,
+        "max_trades": 20,
+        "cooldown": 1,
+        "reinvest": True
+    }
+
+def save_settings(data):
+    with open(SETTINGS_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+# Routes
+@app.route('/')
+def dashboard():
+    settings = load_settings()
+    return render_template('dashboard.html', settings=settings)
+
+@app.route('/prices')
 def prices():
     try:
-        response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd")
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
+        response = requests.get(url)
         response.raise_for_status()
         data = response.json()
         return jsonify({
-            "bitcoin": data.get("bitcoin", {}).get("usd", "Error"),
-            "ethereum": data.get("ethereum", {}).get("usd", "Error")
+            "BTC": data["bitcoin"]["usd"],
+            "ETH": data["ethereum"]["usd"]
         })
     except Exception as e:
         print("Error fetching prices:", e)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"BTC": None, "ETH": None}), 500
 
-@app.route("/settings", methods=["GET", "POST"])
+@app.route('/settings', methods=['GET', 'POST'])
 def settings():
-    if request.method == "POST":
+    if request.method == 'POST':
         data = request.get_json()
-        with open("settings.json", "w") as f:
-            json.dump(data, f)
-        return jsonify({"message": "Settings updated."})
-    else:
-        if os.path.exists("settings.json"):
-            with open("settings.json") as f:
-                return jsonify(json.load(f))
-        return jsonify({})
+        save_settings(data)
+        return jsonify({"status": "saved"})
+    return jsonify(load_settings())
 
-if __name__ == "__main__":
+@app.route('/backtest')
+def backtest():
+    # Placeholder: simulate backtest result
+    growth = [100 + i * random.uniform(0.5, 1.5) for i in range(20)]
+    return jsonify({"growth": growth})
+
+if __name__ == '__main__':
     app.run(debug=True)
