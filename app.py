@@ -1,90 +1,83 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, request, jsonify
 import requests
 import json
 import os
-import time
+import sqlite3
 from datetime import datetime
 
 app = Flask(__name__)
 
+# === Settings File ===
 SETTINGS_FILE = "settings.json"
-PRICE_CACHE = {}
-CACHE_DURATION = 60  # seconds
+DB_FILE = "trades.db"
 
-# Helper to load settings
+# === Load Settings ===
 def load_settings():
-    if not os.path.exists(SETTINGS_FILE):
-        default = {
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, "r") as f:
+            return json.load(f)
+    else:
+        return {
             "stake": 5,
             "target_profit": 5,
             "max_trades": 20,
             "cooldown": 1,
             "reinvest": True
         }
-        save_settings(default)
-        return default
-    with open(SETTINGS_FILE, "r") as f:
-        return json.load(f)
 
-# Helper to save settings
+# === Save Settings ===
 def save_settings(data):
     with open(SETTINGS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+        json.dump(data, f)
 
-# Cache API prices to reduce rate limit hits
-def get_cached_prices():
-    now = time.time()
-    if "timestamp" in PRICE_CACHE and now - PRICE_CACHE["timestamp"] < CACHE_DURATION:
-        return PRICE_CACHE["data"]
+# === Price Fetching ===
+COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
 
+def fetch_prices():
     try:
-        r = requests.get("https://api.coingecko.com/api/v3/simple/price",
-                         params={"ids": "bitcoin,ethereum", "vs_currencies": "usd"})
-        r.raise_for_status()
-        data = r.json()
-        PRICE_CACHE["data"] = data
-        PRICE_CACHE["timestamp"] = now
-        return data
+        response = requests.get(COINGECKO_URL)
+        response.raise_for_status()
+        prices = response.json()
+        btc_price = prices.get("bitcoin", {}).get("usd", "Error")
+        eth_price = prices.get("ethereum", {}).get("usd", "Error")
+        return btc_price, eth_price
     except Exception as e:
-        print("Error fetching prices:", e)
-        return {}
+        print(f"Error fetching prices: {e}")
+        return "Error", "Error"
 
+# === Routes ===
 @app.route("/")
-def dashboard():
+def index():
     settings = load_settings()
     return render_template("dashboard.html", settings=settings)
 
 @app.route("/prices")
 def prices():
-    data = get_cached_prices()
-    return jsonify(data)
+    btc, eth = fetch_prices()
+    return jsonify({"btc": btc, "eth": eth})
 
-@app.route("/update_settings", methods=["POST"])
+@app.route("/settings", methods=["GET", "POST"])
 def update_settings():
-    form = request.form
-    settings = {
-        "stake": float(form.get("stake", 5)),
-        "target_profit": float(form.get("target_profit", 5)),
-        "max_trades": int(form.get("max_trades", 20)),
-        "cooldown": int(form.get("cooldown", 1)),
-        "reinvest": form.get("reinvest") == "true"
-    }
-    save_settings(settings)
-    return "Updated", 200
+    if request.method == "POST":
+        data = request.json
+        save_settings(data)
+        return jsonify({"status": "success"})
+    else:
+        return jsonify(load_settings())
 
-@app.route("/simulate_backtest")
-def simulate_backtest():
-    fake_data = []
-    capital = 100
-    for i in range(20):
-        capital += capital * 0.02
-        fake_data.append({
-            "time": f"T{i+1}",
-            "capital": round(capital, 2),
-            "profit": round(capital - 100, 2),
-            "trades": i+1
-        })
-    return jsonify(fake_data)
+@app.route("/simulate", methods=["POST"])
+def simulate():
+    settings = load_settings()
+    initial = float(settings.get("stake", 5))
+    growth = [initial]
+    for i in range(int(settings.get("max_trades", 20))):
+        profit = growth[-1] * float(settings.get("target_profit", 5)) / 100
+        if not settings.get("reinvest", True):
+            growth.append(growth[-1] + profit)
+        else:
+            growth.append(growth[-1] * (1 + float(settings.get("target_profit", 5)) / 100))
+    return jsonify({"growth": growth})
 
+# === Run ===
 if __name__ == "__main__":
     app.run(debug=True)
