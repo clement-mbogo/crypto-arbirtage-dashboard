@@ -8,6 +8,9 @@ from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 import requests
 from dotenv import load_dotenv
+from binance.client import Client
+
+# === LOAD .ENV ===
 load_dotenv()
 
 # === CONFIGURATION ===
@@ -17,7 +20,13 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key'
 PAIRS = ['BTC', 'ETH']
 
-# === LOAD/INIT SETTINGS ===
+# === INIT BINANCE TESTNET ===
+BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
+BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
+binance_client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
+binance_client.API_URL = 'https://testnet.binance.vision/api'
+
+# === SETTINGS ===
 def load_settings():
     if not os.path.exists(SETTINGS_FILE):
         default = {
@@ -38,7 +47,7 @@ def save_settings(data):
     with open(SETTINGS_FILE, 'w') as f:
         json.dump(data, f)
 
-# === DB SETUP ===
+# === DB INIT ===
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
@@ -105,24 +114,18 @@ def get_prices():
         'kucoin': fetch_kucoin_prices()
     }
 
-from flask import redirect
-
-@app.route('/prices')
-def prices_alias():
-    return redirect('/get_prices')
-
 # === TELEGRAM ALERT ===
 def send_telegram_alert(message):
     try:
-        token = os.getenv("TG_BOT_TOKEN") or "your_bot_token"
-        chat_id = os.getenv("TG_CHAT_ID") or "your_chat_id"
+        token = os.getenv("TG_BOT_TOKEN")
+        chat_id = os.getenv("TG_CHAT_ID")
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {'chat_id': chat_id, 'text': message}
         requests.post(url, data=payload)
     except:
         pass
 
-# === TRADING SIMULATION LOOP ===
+# === SIMULATION LOOP ===
 def run_bot():
     global bot_running
     while bot_running:
@@ -160,14 +163,21 @@ def index():
     prices = get_prices()
     return render_template('dashboard.html', prices=prices, settings=settings, pairs=PAIRS)
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    session['user'] = 'admin'
+    return redirect(url_for('index'))
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
 @app.route('/update_settings', methods=['POST'])
 def update_settings():
     data = request.get_json()
     save_settings(data)
     return jsonify({'status': 'success'})
-from dotenv import load_dotenv
-load_dotenv()
-
 
 @app.route('/get_settings')
 def get_settings():
@@ -176,6 +186,10 @@ def get_settings():
 @app.route('/get_prices')
 def live_prices():
     return jsonify(get_prices())
+
+@app.route('/prices')
+def prices_alias():
+    return redirect('/get_prices')
 
 @app.route('/get_trades')
 def get_trades():
@@ -195,11 +209,9 @@ def get_chart_data():
     rows = cur.fetchall()
     data = []
     capital = 0
-    total_profit = 0
     for idx, row in enumerate(rows):
         profit = row[1]
         capital += profit
-        total_profit += profit
         data.append({
             'timestamp': row[0],
             'capital': round(capital, 2),
@@ -249,7 +261,7 @@ def real_growth():
         capital += row[1]
         data.append(round(capital, 2))
     return jsonify(data)
-from binance.client import Client
+
 @app.route('/binance_balance')
 def binance_balance():
     try:
@@ -259,30 +271,10 @@ def binance_balance():
     except Exception as e:
         return jsonify({'error': str(e)})
 
-
-from binance.client import Client
-
-BINANCE_API_KEY = os.getenv("lgvTzhdwSyLcHdpoE60FSB1oGTLRvXoEtWy9QCXoAUXqvChPAchot4qeTzc1dMMV")
-BINANCE_API_SECRET = os.getenv("7I7divRbbRimC1iB7ZuC099HNWMKuco56yMvdeU6IPpYScOoD5qdnGV5rkDrVfpI")
-
-binance_client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
-binance_client.API_URL = 'https://testnet.binance.vision/api'  # ✅ Add this line
-
-
-
 @app.route('/backtest', methods=['POST'])
 def backtest():
     return jsonify({'status': 'ok', 'message': 'Backtest completed (placeholder)'})
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    session['user'] = 'admin'
-    return redirect(url_for('index'))
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
-
+# === MAIN ===
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
