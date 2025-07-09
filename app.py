@@ -7,6 +7,9 @@ import time
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 import requests
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # === CONFIGURATION ===
 SETTINGS_FILE = 'settings.json'

@@ -1,0 +1,9 @@
+{
+  "pair": "BTC",
+  "stake": 5,
+  "target_profit": 5,
+  "max_trades": 20,
+  "cooldown": 60,
+  "reinvest": true,
+  "mode": "paper"
+}
