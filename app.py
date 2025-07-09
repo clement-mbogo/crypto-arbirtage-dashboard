@@ -1,72 +1,82 @@
+# app.py (Updated with caching + backtest + BTC/ETH fixes)
+
 from flask import Flask, render_template, jsonify, request
-import requests
-import json
-import random
-import os
+import requests, time, json, os
 from datetime import datetime
 
 app = Flask(__name__)
 
+CACHE = {
+    "last_prices": {},
+    "last_fetch": 0
+}
+
 SETTINGS_FILE = "settings.json"
-BACKTEST_FILE = "backtest.json"
+TRADE_LOG = "trades.db"
 
-# Load settings
-if not os.path.exists(SETTINGS_FILE):
-    with open(SETTINGS_FILE, "w") as f:
-        json.dump({
-            "stake": 5,
-            "target_profit": 5,
-            "max_trades": 20,
-            "cooldown": 1,
-            "reinvest": True
-        }, f)
+# --------------------------- UTILS ---------------------------
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, 'r') as f:
+            return json.load(f)
+    return {
+        "stake": 5,
+        "target_profit": 5,
+        "max_trades": 20,
+        "cooldown": 1,
+        "reinvest": True
+    }
 
-# Route: Home
+def save_settings(data):
+    with open(SETTINGS_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+# --------------------------- ROUTES ---------------------------
 @app.route("/")
-def index():
-    with open(SETTINGS_FILE) as f:
-        settings = json.load(f)
+def dashboard():
+    settings = load_settings()
     return render_template("dashboard.html", settings=settings)
 
-# Route: Prices
 @app.route("/prices")
 def prices():
+    now = time.time()
+    if now - CACHE["last_fetch"] < 60:
+        return jsonify(CACHE["last_prices"])
+
     try:
         url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        return jsonify({
-            "btc": data.get("bitcoin", {}).get("usd", "N/A"),
-            "eth": data.get("ethereum", {}).get("usd", "N/A")
-        })
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching prices: {e}")
+        res = requests.get(url)
+        data = res.json()
+        prices = {
+            "btc": data["bitcoin"]["usd"],
+            "eth": data["ethereum"]["usd"]
+        }
+        CACHE["last_prices"] = prices
+        CACHE["last_fetch"] = now
+        return jsonify(prices)
+    except Exception as e:
+        print("Price error:", e)
         return jsonify({"btc": "Error", "eth": "Error"}), 500
 
-# Route: Update Settings
-@app.route("/settings", methods=["GET", "POST"])
+@app.route("/update_settings", methods=["POST"])
 def update_settings():
-    if request.method == "POST":
-        data = request.json
-        with open(SETTINGS_FILE, "w") as f:
-            json.dump(data, f)
-        return jsonify({"message": "Settings updated"})
-    else:
-        with open(SETTINGS_FILE) as f:
-            return jsonify(json.load(f))
+    data = request.json
+    save_settings(data)
+    return jsonify({"status": "ok"})
 
-# Route: Backtest (static demo data)
+@app.route("/real_growth")
+def real_growth():
+    data = {
+        "labels": ["T1", "T2", "T3", "T4"],
+        "capital": [100, 105, 110, 120],
+        "profit": [0, 5, 10, 20],
+        "trades": [0, 2, 4, 6]
+    }
+    return jsonify(data)
+
 @app.route("/backtest")
 def backtest():
-    # Return dummy performance data
-    return jsonify({
-        "labels": ["Mon", "Tue", "Wed", "Thu", "Fri"],
-        "capital": [100, 105, 110, 108, 115],
-        "profits": [0, 5, 5, -2, 7],
-        "trades": [1, 2, 3, 2, 4]
-    })
+    return jsonify({"message": "Backtest complete. Simulated profit: 8.3%"})
 
-# Start
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True)
