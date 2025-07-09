@@ -76,6 +76,12 @@ def get_prices():
         }
     except:
         return {'BTC': 0, 'ETH': 0}
+from flask import redirect  # make sure this is imported at the top
+
+@app.route('/prices')
+def prices_alias():
+    return redirect('/get_prices')
+
 
 # === TELEGRAM ALERT (OPTIONAL) ===
 def send_telegram_alert(message):
