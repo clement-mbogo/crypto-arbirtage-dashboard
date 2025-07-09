@@ -260,9 +260,14 @@ def binance_balance():
         return jsonify({'error': str(e)})
 
 
-BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
-BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
+from binance.client import Client
+
+BINANCE_API_KEY = os.getenv("lgvTzhdwSyLcHdpoE60FSB1oGTLRvXoEtWy9QCXoAUXqvChPAchot4qeTzc1dMMV")
+BINANCE_API_SECRET = os.getenv("7I7divRbbRimC1iB7ZuC099HNWMKuco56yMvdeU6IPpYScOoD5qdnGV5rkDrVfpI")
+
 binance_client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
+binance_client.API_URL = 'https://testnet.binance.vision/api'  # ✅ Add this line
+
 
 
 @app.route('/backtest', methods=['POST'])
