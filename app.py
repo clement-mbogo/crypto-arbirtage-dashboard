@@ -286,6 +286,73 @@ def real_growth():
         capital += row[1]
         data.append(round(capital, 2))
     return jsonify(data)
+def fetch_all_cex_prices():
+    prices = {}
+    
+    # Binance
+    try:
+        binance = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT').json()
+        prices['Binance'] = float(binance['price'])
+    except:
+        prices['Binance'] = 0
+
+    # KuCoin
+    try:
+        res = requests.get('https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=BTC-USDT').json()
+        prices['KuCoin'] = float(res['data']['price'])
+    except:
+        prices['KuCoin'] = 0
+
+    # Gate.io
+    try:
+        gate = requests.get('https://api.gate.io/api2/1/ticker/BTC_USDT').json()
+        prices['Gate.io'] = float(gate['last'])
+    except:
+        prices['Gate.io'] = 0
+
+    # Bybit
+    try:
+        bybit = requests.get('https://api.bybit.com/v2/public/tickers?symbol=BTCUSDT').json()
+        prices['Bybit'] = float(bybit['result'][0]['last_price'])
+    except:
+        prices['Bybit'] = 0
+
+    # Kraken
+    try:
+        kraken = requests.get('https://api.kraken.com/0/public/Ticker?pair=XBTUSD').json()
+        prices['Kraken'] = float(kraken['result']['XXBTZUSD']['c'][0])
+    except:
+        prices['Kraken'] = 0
+
+    # Coinbase
+    try:
+        cb = requests.get('https://api.coinbase.com/v2/prices/BTC-USD/spot').json()
+        prices['Coinbase'] = float(cb['data']['amount'])
+    except:
+        prices['Coinbase'] = 0
+
+    # HTX (formerly Huobi)
+    try:
+        htx = requests.get('https://api.huobi.pro/market/detail/merged?symbol=btcusdt').json()
+        prices['HTX'] = float(htx['tick']['close'])
+    except:
+        prices['HTX'] = 0
+
+    # MEXC
+    try:
+        mexc = requests.get('https://api.mexc.com/api/v3/ticker/price?symbol=BTCUSDT').json()
+        prices['MEXC'] = float(mexc['price'])
+    except:
+        prices['MEXC'] = 0
+
+    return prices
+
+@app.route('/compare_prices')
+def compare_prices():
+    prices = fetch_all_cex_prices()
+    return jsonify(prices)
+
+
 
 # === AUTH ROUTES ===
 @app.route('/login', methods=['GET', 'POST'])
