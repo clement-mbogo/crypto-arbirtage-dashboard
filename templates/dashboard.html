@@ -12,6 +12,10 @@
     .price-card {
       border-radius: 1rem;
       box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.05);
+      transition: transform 0.3s ease;
+    }
+    .price-card:hover {
+      transform: translateY(-5px);
     }
   </style>
 </head>
@@ -20,27 +24,27 @@
     <h1 class="text-center mb-4">💰 Crypto Arbitrage Dashboard</h1>
 
     <div class="row justify-content-center mb-4">
-      <div class="col-md-4">
+      <div class="col-md-4 mb-3">
         <div class="card price-card text-center">
           <div class="card-body">
             <h5 class="card-title">Bitcoin (BTC)</h5>
-            <p id="btc-price" class="card-text fs-4">Loading...</p>
+            <p id="btc-price" class="card-text fs-4 text-primary">Loading...</p>
           </div>
         </div>
       </div>
 
-      <div class="col-md-4">
+      <div class="col-md-4 mb-3">
         <div class="card price-card text-center">
           <div class="card-body">
             <h5 class="card-title">Ethereum (ETH)</h5>
-            <p id="eth-price" class="card-text fs-4">Loading...</p>
+            <p id="eth-price" class="card-text fs-4 text-success">Loading...</p>
           </div>
         </div>
       </div>
     </div>
 
     <div class="text-center">
-      <button class="btn btn-primary" onclick="fetchPrices()">🔄 Refresh Prices</button>
+      <button class="btn btn-outline-primary" onclick="fetchPrices()">🔄 Refresh Prices</button>
     </div>
   </div>
 
@@ -62,7 +66,7 @@
       }
     }
 
-    fetchPrices(); // Fetch on page load
+    fetchPrices(); // Fetch once on page load
   </script>
 </body>
 </html>
