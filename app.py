@@ -1,105 +1,88 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for
-import requests
 import json
-import os
 import sqlite3
+import threading
+import time
 from datetime import datetime
+import requests
+from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
-SETTINGS_FILE = 'settings.json'
-DB_FILE = 'trades.db'
+DB_PATH = 'trades.db'
+SETTINGS_PATH = 'settings.json'
 
-# Initialize settings file if not exist
-def init_settings():
-    if not os.path.exists(SETTINGS_FILE):
-        default_settings = {
+# Load or initialize settings
+def load_settings():
+    try:
+        with open(SETTINGS_PATH, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        settings = {
             "stake": 5,
             "target_profit": 5,
             "max_trades": 20,
-            "cooldown": 1,
-            "reinvest": True,
-            "live_mode": False
+            "cooldown": 60,
+            "reinvest": True
         }
-        with open(SETTINGS_FILE, 'w') as f:
-            json.dump(default_settings, f, indent=4)
+        with open(SETTINGS_PATH, 'w') as f:
+            json.dump(settings, f)
+        return settings
 
-# Load settings from file
-def load_settings():
-    with open(SETTINGS_FILE, 'r') as f:
-        return json.load(f)
-
-# Save settings to file
+# Save settings
 def save_settings(data):
-    with open(SETTINGS_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
+    with open(SETTINGS_PATH, 'w') as f:
+        json.dump(data, f)
 
-# Initialize trades database if not exist
+# Init DB
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS trades (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    time TEXT,
+                    timestamp TEXT,
                     pair TEXT,
-                    profit REAL,
-                    capital REAL
+                    profit REAL
                 )''')
     conn.commit()
     conn.close()
 
+init_db()
+settings = load_settings()
+
 @app.route('/')
-def index():
-    settings = load_settings()
+def dashboard():
     return render_template('dashboard.html', settings=settings)
 
-@app.route('/prices')
-def prices():
-    try:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
-        response = requests.get(url)
-        data = response.json()
-        btc = data['bitcoin']['usd']
-        eth = data['ethereum']['usd']
-        return jsonify({"btc": btc, "eth": eth})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/settings', methods=['GET', 'POST'])
-def settings():
+def update_settings():
     if request.method == 'POST':
         data = request.get_json()
         save_settings(data)
         return jsonify({"status": "updated"})
     return jsonify(load_settings())
 
+@app.route('/prices')
+def prices():
+    try:
+        r = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd")
+        r.raise_for_status()
+        return jsonify(r.json())
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/growth')
 def growth():
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT time, profit, capital FROM trades ORDER BY id ASC")
-    rows = c.fetchall()
+    c.execute("SELECT timestamp, SUM(profit) OVER (ORDER BY id) FROM trades")
+    data = c.fetchall()
     conn.close()
-
-    result = []
-    for r in rows:
-        result.append({
-            "time": r[0],
-            "profit": r[1],
-            "capital": r[2]
-        })
-    return jsonify(result)
+    return jsonify(data)
 
 @app.route('/backtest')
 def backtest():
-    # Dummy result (real logic to be added)
-    return jsonify({
-        "status": "completed",
-        "trades": 15,
-        "profit": 42.5
-    })
+    fake_results = [{"timestamp": datetime.now().isoformat(), "profit": i} for i in range(10)]
+    return jsonify(fake_results)
 
 if __name__ == '__main__':
-    init_settings()
-    init_db()
     app.run(debug=True)
