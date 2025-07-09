@@ -2,71 +2,174 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Crypto Arbitrage Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    body {
-      background-color: #f8f9fa;
-    }
-    .price-card {
-      border-radius: 1rem;
-      box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.05);
-      transition: transform 0.3s ease;
-    }
-    .price-card:hover {
-      transform: translateY(-5px);
-    }
+    body.light-mode { background-color: #f8f9fa; color: #000; }
+    body.dark-mode { background-color: #121212; color: #fff; }
+    .card { border-radius: 1rem; }
+    .tab-content > .tab-pane:not(.active) { display: none; }
   </style>
 </head>
-<body>
-  <div class="container py-5">
-    <h1 class="text-center mb-4">💰 Crypto Arbitrage Dashboard</h1>
-
-    <div class="row justify-content-center mb-4">
-      <div class="col-md-4 mb-3">
-        <div class="card price-card text-center">
-          <div class="card-body">
-            <h5 class="card-title">Bitcoin (BTC)</h5>
-            <p id="btc-price" class="card-text fs-4 text-primary">Loading...</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-md-4 mb-3">
-        <div class="card price-card text-center">
-          <div class="card-body">
-            <h5 class="card-title">Ethereum (ETH)</h5>
-            <p id="eth-price" class="card-text fs-4 text-success">Loading...</p>
-          </div>
-        </div>
+<body class="light-mode">
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2>💰 Crypto Arbitrage Dashboard</h2>
+      <div>
+        <button id="startBtn" class="btn btn-success btn-sm">▶️ Start Bot</button>
+        <button id="stopBtn" class="btn btn-danger btn-sm">⏹️ Stop Bot</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleMode()">🌗 Toggle Theme</button>
       </div>
     </div>
 
-    <div class="text-center">
-      <button class="btn btn-outline-primary" onclick="fetchPrices()">🔄 Refresh Prices</button>
+    <ul class="nav nav-tabs" id="tabNav">
+      <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#dashboard">Dashboard</a></li>
+      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#trades">Trades</a></li>
+      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#settings">Settings</a></li>
+    </ul>
+
+    <div class="tab-content pt-3">
+      <!-- DASHBOARD TAB -->
+      <div class="tab-pane fade show active" id="dashboard">
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <div class="card text-center p-3">
+              <h5>Bitcoin (BTC)</h5>
+              <h4 id="btc-price" class="text-primary">Loading...</h4>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card text-center p-3">
+              <h5>Ethereum (ETH)</h5>
+              <h4 id="eth-price" class="text-success">Loading...</h4>
+            </div>
+          </div>
+        </div>
+
+        <div class="card p-3">
+          <h5>📈 Capital Growth</h5>
+          <canvas id="growthChart" height="100"></canvas>
+        </div>
+      </div>
+
+      <!-- TRADES TAB -->
+      <div class="tab-pane fade" id="trades">
+        <div class="card p-3">
+          <h5>📋 Trade History</h5>
+          <table class="table table-bordered table-sm">
+            <thead>
+              <tr><th>Timestamp</th><th>Pair</th><th>Profit</th><th>Status</th></tr>
+            </thead>
+            <tbody id="trade-log"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SETTINGS TAB -->
+      <div class="tab-pane fade" id="settings">
+        <div class="card p-3">
+          <h5>⚙️ Bot Settings</h5>
+          <form id="settingsForm">
+            <div class="row">
+              <div class="col-md-3"><label>Stake ($)</label><input class="form-control" name="stake" type="number" /></div>
+              <div class="col-md-3"><label>Target Profit (%)</label><input class="form-control" name="target_profit" type="number" /></div>
+              <div class="col-md-3"><label>Max Trades</label><input class="form-control" name="max_trades" type="number" /></div>
+              <div class="col-md-3"><label>Cooldown (sec)</label><input class="form-control" name="cooldown" type="number" /></div>
+            </div>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" name="reinvest" id="reinvestCheck">
+              <label class="form-check-label" for="reinvestCheck">Enable Reinvest</label>
+            </div>
+            <button class="btn btn-primary mt-3">💾 Save Settings</button>
+          </form>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
+    // Theme toggle
+    function toggleMode() {
+      document.body.classList.toggle('dark-mode');
+      document.body.classList.toggle('light-mode');
+    }
+
+    // Fetch BTC/ETH prices
     async function fetchPrices() {
       try {
-        const res = await fetch("/prices");
+        const res = await fetch('/prices');
         const data = await res.json();
-
-        if (data.error) {
-          document.getElementById("btc-price").innerText = "Error";
-          document.getElementById("eth-price").innerText = "Error";
-        } else {
-          document.getElementById("btc-price").innerText = "$" + data.BTC.toLocaleString();
-          document.getElementById("eth-price").innerText = "$" + data.ETH.toLocaleString();
-        }
-      } catch (err) {
-        console.error("Failed to fetch prices", err);
+        document.getElementById('btc-price').innerText = '$' + data.BTC.toLocaleString();
+        document.getElementById('eth-price').innerText = '$' + data.ETH.toLocaleString();
+      } catch {
+        document.getElementById('btc-price').innerText = 'Error';
+        document.getElementById('eth-price').innerText = 'Error';
       }
     }
 
-    fetchPrices(); // Fetch once on page load
+    // Fetch growth chart data
+    async function loadChart() {
+      const res = await fetch('/real_growth');
+      const data = await res.json();
+      new Chart(document.getElementById('growthChart'), {
+        type: 'line',
+        data: {
+          labels: data.timestamps,
+          datasets: [{ label: 'Capital ($)', data: data.capital, fill: true, borderColor: 'green', tension: 0.3 }]
+        }
+      });
+    }
+
+    // Load trades
+    async function loadTrades() {
+      const res = await fetch('/get_trades');
+      const trades = await res.json();
+      const table = document.getElementById('trade-log');
+      table.innerHTML = trades.map(t =>
+        `<tr><td>${t.timestamp}</td><td>${t.pair}</td><td>$${t.profit}</td><td>${t.status}</td></tr>`
+      ).join('');
+    }
+
+    // Settings load/save
+    async function loadSettings() {
+      const res = await fetch('/get_settings');
+      const settings = await res.json();
+      for (const key in settings) {
+        const el = document.querySelector(`[name="${key}"]`);
+        if (el) {
+          if (el.type === 'checkbox') el.checked = settings[key];
+          else el.value = settings[key];
+        }
+      }
+    }
+
+    document.getElementById('settingsForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const payload = {};
+      formData.forEach((val, key) => {
+        payload[key] = key === 'reinvest' ? e.target[key].checked : val;
+      });
+      await fetch('/save_settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      alert('✅ Settings saved');
+    });
+
+    // Start/Stop bot
+    document.getElementById('startBtn').onclick = () => fetch('/start');
+    document.getElementById('stopBtn').onclick = () => fetch('/stop');
+
+    // Init
+    fetchPrices();
+    loadChart();
+    loadTrades();
+    loadSettings();
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
