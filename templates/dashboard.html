@@ -2,174 +2,169 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Crypto Arbitrage Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    body.light-mode { background-color: #f8f9fa; color: #000; }
-    body.dark-mode { background-color: #121212; color: #fff; }
-    .card { border-radius: 1rem; }
-    .tab-content > .tab-pane:not(.active) { display: none; }
+    body {
+      background-color: #f5f5f5;
+    }
+    .card {
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    }
+    .toggle-btn {
+      margin: 0 0.5rem;
+    }
+    #chart-container {
+      height: 300px;
+    }
   </style>
 </head>
-<body class="light-mode">
-  <div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2>💰 Crypto Arbitrage Dashboard</h2>
-      <div>
-        <button id="startBtn" class="btn btn-success btn-sm">▶️ Start Bot</button>
-        <button id="stopBtn" class="btn btn-danger btn-sm">⏹️ Stop Bot</button>
-        <button class="btn btn-secondary btn-sm" onclick="toggleMode()">🌗 Toggle Theme</button>
-      </div>
+<body>
+<div class="container py-4">
+  <h2 class="mb-4 text-center">💰 Crypto Arbitrage Dashboard</h2>
+
+  <div class="d-flex justify-content-center mb-3">
+    <div class="btn-group" role="group">
+      <button class="btn btn-outline-primary toggle-btn" id="toggle-live">Live Mode</button>
+      <button class="btn btn-outline-secondary toggle-btn" id="toggle-paper">Paper Mode</button>
     </div>
+  </div>
 
-    <ul class="nav nav-tabs" id="tabNav">
-      <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#dashboard">Dashboard</a></li>
-      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#trades">Trades</a></li>
-      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#settings">Settings</a></li>
-    </ul>
-
-    <div class="tab-content pt-3">
-      <!-- DASHBOARD TAB -->
-      <div class="tab-pane fade show active" id="dashboard">
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <div class="card text-center p-3">
-              <h5>Bitcoin (BTC)</h5>
-              <h4 id="btc-price" class="text-primary">Loading...</h4>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <div class="card text-center p-3">
-              <h5>Ethereum (ETH)</h5>
-              <h4 id="eth-price" class="text-success">Loading...</h4>
-            </div>
-          </div>
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row text-center">
+        <div class="col">
+          <h5>Bitcoin (BTC)</h5>
+          <div id="btc-price">Loading...</div>
         </div>
-
-        <div class="card p-3">
-          <h5>📈 Capital Growth</h5>
-          <canvas id="growthChart" height="100"></canvas>
-        </div>
-      </div>
-
-      <!-- TRADES TAB -->
-      <div class="tab-pane fade" id="trades">
-        <div class="card p-3">
-          <h5>📋 Trade History</h5>
-          <table class="table table-bordered table-sm">
-            <thead>
-              <tr><th>Timestamp</th><th>Pair</th><th>Profit</th><th>Status</th></tr>
-            </thead>
-            <tbody id="trade-log"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- SETTINGS TAB -->
-      <div class="tab-pane fade" id="settings">
-        <div class="card p-3">
-          <h5>⚙️ Bot Settings</h5>
-          <form id="settingsForm">
-            <div class="row">
-              <div class="col-md-3"><label>Stake ($)</label><input class="form-control" name="stake" type="number" /></div>
-              <div class="col-md-3"><label>Target Profit (%)</label><input class="form-control" name="target_profit" type="number" /></div>
-              <div class="col-md-3"><label>Max Trades</label><input class="form-control" name="max_trades" type="number" /></div>
-              <div class="col-md-3"><label>Cooldown (sec)</label><input class="form-control" name="cooldown" type="number" /></div>
-            </div>
-            <div class="form-check mt-2">
-              <input class="form-check-input" type="checkbox" name="reinvest" id="reinvestCheck">
-              <label class="form-check-label" for="reinvestCheck">Enable Reinvest</label>
-            </div>
-            <button class="btn btn-primary mt-3">💾 Save Settings</button>
-          </form>
+        <div class="col">
+          <h5>Ethereum (ETH)</h5>
+          <div id="eth-price">Loading...</div>
         </div>
       </div>
     </div>
   </div>
 
-  <script>
-    // Theme toggle
-    function toggleMode() {
-      document.body.classList.toggle('dark-mode');
-      document.body.classList.toggle('light-mode');
-    }
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">📈 Performance</h5>
+        <select class="form-select w-auto" id="chartType">
+          <option value="profit">Profit</option>
+          <option value="capital">Capital</option>
+          <option value="trades">Trade Count</option>
+        </select>
+      </div>
+      <div id="chart-container">
+        <canvas id="growthChart"></canvas>
+      </div>
+    </div>
+  </div>
 
-    // Fetch BTC/ETH prices
-    async function fetchPrices() {
-      try {
-        const res = await fetch('/prices');
-        const data = await res.json();
-        document.getElementById('btc-price').innerText = '$' + data.BTC.toLocaleString();
-        document.getElementById('eth-price').innerText = '$' + data.ETH.toLocaleString();
-      } catch {
-        document.getElementById('btc-price').innerText = 'Error';
-        document.getElementById('eth-price').innerText = 'Error';
-      }
-    }
+  <div class="card">
+    <div class="card-body">
+      <h5>⚙️ Settings</h5>
+      <form id="settingsForm">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label for="stake" class="form-label">Stake Amount</label>
+            <input type="number" class="form-control" id="stake" name="stake">
+          </div>
+          <div class="col-md-4">
+            <label for="target_profit" class="form-label">Target Profit (%)</label>
+            <input type="number" class="form-control" id="target_profit" name="target_profit">
+          </div>
+          <div class="col-md-4">
+            <label for="max_trades" class="form-label">Max Trades</label>
+            <input type="number" class="form-control" id="max_trades" name="max_trades">
+          </div>
+        </div>
+        <div class="form-check form-switch mt-3">
+          <input class="form-check-input" type="checkbox" id="reinvest" name="reinvest">
+          <label class="form-check-label" for="reinvest">Reinvest Profits</label>
+        </div>
+        <button type="submit" class="btn btn-primary mt-3">Save Settings</button>
+      </form>
+    </div>
+  </div>
+</div>
 
-    // Fetch growth chart data
-    async function loadChart() {
-      const res = await fetch('/real_growth');
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  async function fetchPrices() {
+    try {
+      const res = await fetch('/prices');
       const data = await res.json();
-      new Chart(document.getElementById('growthChart'), {
-        type: 'line',
-        data: {
-          labels: data.timestamps,
-          datasets: [{ label: 'Capital ($)', data: data.capital, fill: true, borderColor: 'green', tension: 0.3 }]
-        }
-      });
+      document.getElementById('btc-price').textContent = `$${data.bitcoin}`;
+      document.getElementById('eth-price').textContent = `$${data.ethereum}`;
+    } catch (err) {
+      document.getElementById('btc-price').textContent = 'Error';
+      document.getElementById('eth-price').textContent = 'Error';
     }
+  }
 
-    // Load trades
-    async function loadTrades() {
-      const res = await fetch('/get_trades');
-      const trades = await res.json();
-      const table = document.getElementById('trade-log');
-      table.innerHTML = trades.map(t =>
-        `<tr><td>${t.timestamp}</td><td>${t.pair}</td><td>$${t.profit}</td><td>${t.status}</td></tr>`
-      ).join('');
-    }
-
-    // Settings load/save
-    async function loadSettings() {
-      const res = await fetch('/get_settings');
-      const settings = await res.json();
-      for (const key in settings) {
-        const el = document.querySelector(`[name="${key}"]`);
-        if (el) {
-          if (el.type === 'checkbox') el.checked = settings[key];
-          else el.value = settings[key];
+  async function preloadSettings() {
+    const res = await fetch('/get_settings');
+    const settings = await res.json();
+    for (let key in settings) {
+      const input = document.getElementById(key);
+      if (input) {
+        if (input.type === 'checkbox') {
+          input.checked = settings[key];
+        } else {
+          input.value = settings[key];
         }
       }
     }
+  }
 
-    document.getElementById('settingsForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const payload = {};
-      formData.forEach((val, key) => {
-        payload[key] = key === 'reinvest' ? e.target[key].checked : val;
-      });
-      await fetch('/save_settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      alert('✅ Settings saved');
+  async function loadChart(type = 'profit') {
+    const res = await fetch(`/real_growth?type=${type}`);
+    const chartData = await res.json();
+    const ctx = document.getElementById('growthChart').getContext('2d');
+    if (window.chartInstance) window.chartInstance.destroy();
+    window.chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: chartData.labels,
+        datasets: [{
+          label: type.charAt(0).toUpperCase() + type.slice(1),
+          data: chartData.values,
+          borderColor: 'rgba(54, 162, 235, 1)',
+          backgroundColor: 'rgba(54, 162, 235, 0.2)',
+          tension: 0.2,
+          fill: true,
+        }]
+      }
     });
+  }
 
-    // Start/Stop bot
-    document.getElementById('startBtn').onclick = () => fetch('/start');
-    document.getElementById('stopBtn').onclick = () => fetch('/stop');
+  document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const json = Object.fromEntries(formData.entries());
+    json.reinvest = document.getElementById('reinvest').checked;
+    await fetch('/update_settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(json)
+    });
+    alert('Settings saved!');
+  });
 
-    // Init
-    fetchPrices();
-    loadChart();
-    loadTrades();
-    loadSettings();
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  document.getElementById('chartType').addEventListener('change', (e) => {
+    loadChart(e.target.value);
+  });
+
+  document.getElementById('toggle-live').addEventListener('click', () => alert('Live Mode Activated'));
+  document.getElementById('toggle-paper').addEventListener('click', () => alert('Paper Mode Activated'));
+
+  fetchPrices();
+  preloadSettings();
+  loadChart();
+  setInterval(fetchPrices, 60000);
+</script>
 </body>
 </html>
