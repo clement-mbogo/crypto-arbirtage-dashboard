@@ -1,163 +1,142 @@
-<!DOCTYPE html>
+""<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Crypto Arbitrage Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    .card {
-      margin-bottom: 20px;
-    }
-    #price-display span {
-      display: inline-block;
-      min-width: 120px;
-    }
-    .form-control, .form-select {
-      margin-bottom: 10px;
-    }
-    .btn-toggle {
-      margin-right: 10px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Crypto Arbitrage Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-light">
-<div class="container py-4">
-  <h1 class="mb-4 text-center">💰 Crypto Arbitrage Dashboard</h1>
+    <div class="container py-4">
+        <h1 class="text-center mb-4">💰 Crypto Arbitrage Dashboard</h1>
 
-  <!-- Price Section -->
-  <div class="row mb-4">
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-body text-center">
-          <h5 class="card-title">Bitcoin (BTC)</h5>
-          <p id="btc-price" class="h4 text-primary">Loading...</p>
+        <!-- Settings -->
+        <div class="card mb-4">
+            <div class="card-header">Settings</div>
+            <div class="card-body">
+                <form id="settingsForm">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="stake" class="form-label">Stake</label>
+                            <input type="number" class="form-control" id="stake" name="stake" value="{{ settings.stake }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="target_profit" class="form-label">Target Profit (%)</label>
+                            <input type="number" class="form-control" id="target_profit" name="target_profit" value="{{ settings.target_profit }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="max_trades" class="form-label">Max Trades</label>
+                            <input type="number" class="form-control" id="max_trades" name="max_trades" value="{{ settings.max_trades }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="cooldown" class="form-label">Cooldown (s)</label>
+                            <input type="number" class="form-control" id="cooldown" name="cooldown" value="{{ settings.cooldown }}">
+                        </div>
+                    </div>
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" id="reinvest" name="reinvest" {% if settings.reinvest %}checked{% endif %}>
+                        <label class="form-check-label" for="reinvest">Reinvest Profits</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3">Save Settings</button>
+                </form>
+            </div>
         </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-body text-center">
-          <h5 class="card-title">Ethereum (ETH)</h5>
-          <p id="eth-price" class="h4 text-success">Loading...</p>
+
+        <!-- Prices -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card text-white bg-dark">
+                    <div class="card-body">
+                        <h5 class="card-title">Bitcoin (BTC)</h5>
+                        <p class="card-text" id="btcPrice">Loading...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card text-white bg-dark">
+                    <div class="card-body">
+                        <h5 class="card-title">Ethereum (ETH)</h5>
+                        <p class="card-text" id="ethPrice">Loading...</p>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- Settings -->
-  <form id="settings-form" class="mb-4">
-    <div class="card">
-      <div class="card-header">Settings</div>
-      <div class="card-body">
-        <div class="row">
-          <div class="col-md-3">
-            <label>Stake ($)</label>
-            <input type="number" class="form-control" name="stake">
-          </div>
-          <div class="col-md-3">
-            <label>Target Profit (%)</label>
-            <input type="number" class="form-control" name="target_profit">
-          </div>
-          <div class="col-md-3">
-            <label>Max Trades</label>
-            <input type="number" class="form-control" name="max_trades">
-          </div>
-          <div class="col-md-3">
-            <label>Cooldown (seconds)</label>
-            <input type="number" class="form-control" name="cooldown">
-          </div>
+        <!-- Chart + Backtest -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Performance Chart</span>
+                <button class="btn btn-secondary btn-sm" onclick="runBacktest()">Run Backtest</button>
+            </div>
+            <div class="card-body">
+                <canvas id="performanceChart"></canvas>
+            </div>
         </div>
-        <div class="form-check mt-3">
-          <input type="checkbox" class="form-check-input" name="reinvest" id="reinvest">
-          <label class="form-check-label" for="reinvest">Reinvest Profits</label>
-        </div>
-        <button class="btn btn-primary mt-3" type="submit">💾 Save Settings</button>
-        <button class="btn btn-secondary mt-3 ms-2" id="run-backtest">🔁 Run Backtest</button>
-      </div>
     </div>
-  </form>
 
-  <!-- Graph -->
-  <div class="card">
-    <div class="card-header">📈 Performance</div>
-    <div class="card-body">
-      <canvas id="growth-chart" height="100"></canvas>
-    </div>
-  </div>
-</div>
+    <script>
+        async function fetchPrices() {
+            try {
+                const response = await fetch("/prices");
+                if (!response.ok) throw new Error("Rate limit or fetch error");
+                const data = await response.json();
+                document.getElementById("btcPrice").textContent = `$${data.bitcoin}`;
+                document.getElementById("ethPrice").textContent = `$${data.ethereum}`;
+            } catch (err) {
+                document.getElementById("btcPrice").textContent = "Error";
+                document.getElementById("ethPrice").textContent = "Error";
+            }
+        }
 
-<script>
-  async function fetchPrices() {
-    try {
-      const res = await fetch('/prices');
-      const data = await res.json();
-      document.getElementById('btc-price').textContent = `$${data.bitcoin}`;
-      document.getElementById('eth-price').textContent = `$${data.ethereum}`;
-    } catch {
-      document.getElementById('btc-price').textContent = 'Error';
-      document.getElementById('eth-price').textContent = 'Error';
-    }
-  }
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Profit Over Time',
+                    data: [],
+                    borderColor: 'green',
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { display: true },
+                    y: { display: true }
+                }
+            }
+        });
 
-  async function loadSettings() {
-    const res = await fetch('/settings');
-    const data = await res.json();
-    for (let key in data) {
-      const input = document.querySelector(`[name="${key}"]`);
-      if (input) {
-        input.type === 'checkbox' ? input.checked = data[key] : input.value = data[key];
-      }
-    }
-  }
+        function updateChart(data) {
+            chart.data.labels = data.labels;
+            chart.data.datasets[0].data = data.values;
+            chart.update();
+        }
 
-  document.getElementById('settings-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = new FormData(e.target);
-    const settings = {};
-    form.forEach((value, key) => {
-      settings[key] = key === 'reinvest' ? form.get('reinvest') === 'on' : value;
-    });
-    await fetch('/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings)
-    });
-    alert('Settings saved!');
-  });
+        async function runBacktest() {
+            const response = await fetch("/backtest");
+            const data = await response.json();
+            updateChart(data);
+        }
 
-  document.getElementById('run-backtest').addEventListener('click', async (e) => {
-    e.preventDefault();
-    const res = await fetch('/run_backtest');
-    const result = await res.json();
-    alert(`Backtest Result: ${result.result}`);
-  });
+        document.getElementById("settingsForm").addEventListener("submit", async e => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const body = {};
+            for (let [key, val] of formData.entries()) body[key] = val;
+            body.reinvest = document.getElementById("reinvest").checked;
+            await fetch("/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            alert("Settings updated");
+        });
 
-  async function loadGraph() {
-    const res = await fetch('/real_growth');
-    const data = await res.json();
-    const ctx = document.getElementById('growth-chart').getContext('2d');
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: data.labels,
-        datasets: [
-          {
-            label: 'Capital ($)',
-            data: data.capital,
-            borderColor: '#0d6efd',
-            tension: 0.4
-          }
-        ]
-      }
-    });
-  }
-
-  fetchPrices();
-  setInterval(fetchPrices, 60000);
-  loadSettings();
-  loadGraph();
-</script>
+        fetchPrices();
+        setInterval(fetchPrices, 60000);
+    </script>
 </body>
 </html>
