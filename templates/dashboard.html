@@ -1,158 +1,152 @@
-""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crypto Arbitrage Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body {
-            background-color: #f8f9fa;
-        }
-        .card {
-            border-radius: 12px;
-        }
-        .settings-section {
-            background-color: #ffffff;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .graph-section {
-            background-color: #ffffff;
-            border-radius: 12px;
-            padding: 20px;
-        }
-        .price-box {
-            display: flex;
-            justify-content: space-around;
-            padding: 20px;
-        }
+        .card { border-radius: 1rem; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .toggle-btn { margin: 0 5px; }
     </style>
 </head>
-<body>
-<div class="container my-4">
-    <h2 class="mb-4 text-center">💰 Crypto Arbitrage Dashboard</h2>
+<body class="bg-light">
+    <div class="container py-4">
+        <h2 class="text-center mb-4">💰 Crypto Arbitrage Dashboard</h2>
 
-    <div class="settings-section">
-        <h5>Bot Settings</h5>
-        <form id="settingsForm">
-            <div class="row mb-3">
-                <div class="col">
-                    <label>Stake ($)</label>
-                    <input type="number" id="stake" class="form-control" required>
-                </div>
-                <div class="col">
-                    <label>Target Profit (%)</label>
-                    <input type="number" id="target_profit" class="form-control" required>
-                </div>
-                <div class="col">
-                    <label>Max Trades</label>
-                    <input type="number" id="max_trades" class="form-control" required>
-                </div>
-                <div class="col">
-                    <label>Cooldown (mins)</label>
-                    <input type="number" id="cooldown" class="form-control" required>
-                </div>
+        <!-- Settings Form -->
+        <form action="/settings" method="post" class="row g-3 mb-4">
+            <div class="col-md-2">
+                <label for="stake" class="form-label">Stake ($)</label>
+                <input type="number" id="stake" name="stake" class="form-control" value="{{ settings.get('stake', 5) }}">
             </div>
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="reinvest">
-                <label class="form-check-label" for="reinvest">Reinvest Profits</label>
+            <div class="col-md-2">
+                <label for="target_profit" class="form-label">Target Profit (%)</label>
+                <input type="number" id="target_profit" name="target_profit" class="form-control" value="{{ settings.get('target_profit', 5) }}">
             </div>
-            <button type="submit" class="btn btn-primary mt-3">Save Settings</button>
+            <div class="col-md-2">
+                <label for="max_trades" class="form-label">Max Trades</label>
+                <input type="number" id="max_trades" name="max_trades" class="form-control" value="{{ settings.get('max_trades', 20) }}">
+            </div>
+            <div class="col-md-2">
+                <label for="cooldown" class="form-label">Cooldown (s)</label>
+                <input type="number" id="cooldown" name="cooldown" class="form-control" value="{{ settings.get('cooldown', 60) }}">
+            </div>
+            <div class="col-md-2">
+                <label for="reinvest" class="form-label">Reinvest</label>
+                <select id="reinvest" name="reinvest" class="form-select">
+                    <option value="true" {% if settings.get('reinvest') == True %}selected{% endif %}>Yes</option>
+                    <option value="false" {% if settings.get('reinvest') == False %}selected{% endif %}>No</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-success w-100">Save Settings</button>
+            </div>
         </form>
-    </div>
 
-    <div class="price-box card mb-4">
-        <div><strong>Bitcoin (BTC):</strong> <span id="btcPrice">Loading...</span></div>
-        <div><strong>Ethereum (ETH):</strong> <span id="ethPrice">Loading...</span></div>
-    </div>
-
-    <div class="graph-section card mb-4">
+        <!-- Controls -->
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5>Performance Chart</h5>
-            <select id="chartType" class="form-select w-auto">
-                <option value="profit">Profit</option>
-                <option value="capital">Capital</option>
-                <option value="trades">Trade Count</option>
-            </select>
+            <div>
+                <button class="btn btn-outline-primary toggle-btn" onclick="toggleMode('live')">Live</button>
+                <button class="btn btn-outline-secondary toggle-btn" onclick="toggleMode('paper')">Paper</button>
+            </div>
+            <div>
+                <select id="pairFilter" class="form-select w-auto">
+                    <option value="all">All</option>
+                    <option value="BTC">BTC</option>
+                    <option value="ETH">ETH</option>
+                </select>
+            </div>
         </div>
-        <canvas id="growthChart"></canvas>
+
+        <!-- Price Cards -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card p-3 text-center">
+                    <h5>Bitcoin (BTC)</h5>
+                    <h4 id="btc-price">Loading...</h4>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card p-3 text-center">
+                    <h5>Ethereum (ETH)</h5>
+                    <h4 id="eth-price">Loading...</h4>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="card p-4 mb-4">
+            <h5>Performance Chart</h5>
+            <canvas id="growthChart" height="100"></canvas>
+        </div>
+
+        <!-- Backtest Section -->
+        <div class="card p-4">
+            <h5>Backtest Results</h5>
+            <div id="backtestResults">Loading...</div>
+        </div>
     </div>
 
-    <div class="card p-3">
-        <h5>Backtest</h5>
-        <button class="btn btn-outline-secondary" onclick="window.location.href='/backtest'">Run Backtest</button>
-    </div>
-</div>
-
-<script>
-    async function fetchPrices() {
-        try {
-            const response = await fetch("/prices");
-            const data = await response.json();
-            document.getElementById("btcPrice").textContent = `$${data.bitcoin}`;
-            document.getElementById("ethPrice").textContent = `$${data.ethereum}`;
-        } catch {
-            document.getElementById("btcPrice").textContent = "Error";
-            document.getElementById("ethPrice").textContent = "Error";
+    <script>
+        function fetchPrices() {
+            fetch("/prices")
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById("btc-price").innerText = "$" + data.bitcoin;
+                    document.getElementById("eth-price").innerText = "$" + data.ethereum;
+                })
+                .catch(err => {
+                    document.getElementById("btc-price").innerText = "Error";
+                    document.getElementById("eth-price").innerText = "Error";
+                });
         }
-    }
 
-    async function loadSettings() {
-        const response = await fetch("/settings");
-        const settings = await response.json();
-        document.getElementById("stake").value = settings.stake;
-        document.getElementById("target_profit").value = settings.target_profit;
-        document.getElementById("max_trades").value = settings.max_trades;
-        document.getElementById("cooldown").value = settings.cooldown;
-        document.getElementById("reinvest").checked = settings.reinvest;
-    }
+        function loadChart() {
+            fetch("/real_growth")
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById("growthChart").getContext("2d");
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.timestamps,
+                            datasets: [
+                                {
+                                    label: 'Capital ($)',
+                                    data: data.capital,
+                                    borderColor: 'green',
+                                    tension: 0.3
+                                },
+                                {
+                                    label: 'Profit ($)',
+                                    data: data.profit,
+                                    borderColor: 'blue',
+                                    tension: 0.3
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true
+                        }
+                    });
+                });
+        }
 
-    document.getElementById("settingsForm").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const payload = {
-            stake: +document.getElementById("stake").value,
-            target_profit: +document.getElementById("target_profit").value,
-            max_trades: +document.getElementById("max_trades").value,
-            cooldown: +document.getElementById("cooldown").value,
-            reinvest: document.getElementById("reinvest").checked
-        };
-        await fetch("/settings", {
-            method: "POST",
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        alert("Settings saved!");
-    });
+        function toggleMode(mode) {
+            alert("Switched to " + mode + " mode (simulated toggle)");
+        }
 
-    function renderChart(dataType = "profit") {
-        const ctx = document.getElementById('growthChart').getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ["Day 1", "Day 2", "Day 3", "Day 4"],
-                datasets: [{
-                    label: dataType.charAt(0).toUpperCase() + dataType.slice(1),
-                    data: dataType === "capital" ? [100, 120, 140, 170] : dataType === "trades" ? [1, 3, 5, 6] : [0, 5, 12, 20],
-                    borderColor: "#0d6efd",
-                    backgroundColor: "rgba(13,110,253,0.1)",
-                    tension: 0.3
-                }]
-            }
-        });
+        function loadBacktest() {
+            fetch("/backtest")
+                .then(res => res.text())
+                .then(html => document.getElementById("backtestResults").innerHTML = html);
+        }
 
-        document.getElementById("chartType").addEventListener("change", (e) => {
-            chart.destroy();
-            renderChart(e.target.value);
-        });
-    }
-
-    fetchPrices();
-    loadSettings();
-    renderChart();
-    setInterval(fetchPrices, 60000);
-</script>
+        fetchPrices();
+        loadChart();
+        loadBacktest();
+        setInterval(fetchPrices, 30000);
+    </script>
 </body>
-</html>""
+</html>
