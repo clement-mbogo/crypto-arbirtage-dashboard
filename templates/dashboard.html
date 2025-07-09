@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,9 +7,12 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-light">
+<body class="bg-body">
   <div class="container py-4">
-    <h2 class="mb-4 text-center">💰 Crypto Arbitrage Dashboard</h2>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2>💰 Crypto Arbitrage Dashboard</h2>
+      <button id="themeToggle" class="btn btn-outline-dark btn-sm">🌗 Toggle Theme</button>
+    </div>
 
     <!-- Settings -->
     <div class="card mb-4">
@@ -73,15 +76,46 @@
       </div>
     </div>
 
-    <!-- Backtest -->
-    <div class="text-center">
-      <form action="/backtest" method="post">
+    <!-- Export & Backtest -->
+    <div class="text-center mb-4">
+      <a href="/export_trades" class="btn btn-outline-primary me-2">📥 Download Trades CSV</a>
+      <form action="/backtest" method="post" style="display:inline;">
         <button class="btn btn-warning">Run Backtest</button>
       </form>
+    </div>
+
+    <!-- Trade History -->
+    <div class="card mb-4">
+      <div class="card-header">Trade History</div>
+      <div class="card-body table-responsive">
+        <table class="table table-striped" id="tradesTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time</th>
+              <th>Pair</th>
+              <th>Buy Exch.</th>
+              <th>Sell Exch.</th>
+              <th>Buy $</th>
+              <th>Sell $</th>
+              <th>Profit $</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
   <script>
+    // Theme toggle
+    const themeToggle = document.getElementById("themeToggle");
+    themeToggle.addEventListener("click", () => {
+      const html = document.documentElement;
+      const current = html.getAttribute("data-bs-theme");
+      html.setAttribute("data-bs-theme", current === "light" ? "dark" : "light");
+    });
+
     async function fetchPrices() {
       try {
         const res = await fetch("/get_prices");
@@ -148,13 +182,33 @@
       });
     }
 
-    document.getElementById("liveBtn").addEventListener("click", drawChart);
-    document.getElementById("paperBtn").addEventListener("click", drawChart);
+    async function loadTrades() {
+      const res = await fetch("/get_trades");
+      const trades = await res.json();
+      const tbody = document.querySelector("#tradesTable tbody");
+      tbody.innerHTML = "";
+      trades.forEach((t, i) => {
+        const row = `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${new Date(t.timestamp).toLocaleString()}</td>
+            <td>${t.pair}</td>
+            <td>${t.buy_exchange}</td>
+            <td>${t.sell_exchange}</td>
+            <td>${t.buy_price.toFixed(2)}</td>
+            <td>${t.sell_price.toFixed(2)}</td>
+            <td class="fw-bold text-success">$${t.profit.toFixed(2)}</td>
+          </tr>
+        `;
+        tbody.insertAdjacentHTML("beforeend", row);
+      });
+    }
 
     // Initial load
     fetchSettings();
     fetchPrices();
     drawChart();
+    loadTrades();
     setInterval(fetchPrices, 30000);
   </script>
 </body>
