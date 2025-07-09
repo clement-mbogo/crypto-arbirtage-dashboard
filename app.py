@@ -1,94 +1,90 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, jsonify, request
+import requests
 import json
 import os
-import requests
-import sqlite3
+import time
 from datetime import datetime
 
 app = Flask(__name__)
 
-SETTINGS_FILE = 'settings.json'
-DB_FILE = 'trades.db'
+SETTINGS_FILE = "settings.json"
+PRICE_CACHE = {}
+CACHE_DURATION = 60  # seconds
 
-# Load settings from file
+# Helper to load settings
 def load_settings():
     if not os.path.exists(SETTINGS_FILE):
-        return {
+        default = {
             "stake": 5,
             "target_profit": 5,
             "max_trades": 20,
             "cooldown": 1,
             "reinvest": True
         }
-    with open(SETTINGS_FILE, 'r') as f:
+        save_settings(default)
+        return default
+    with open(SETTINGS_FILE, "r") as f:
         return json.load(f)
 
-# Save settings to file
+# Helper to save settings
 def save_settings(data):
-    with open(SETTINGS_FILE, 'w') as f:
-        json.dump(data, f)
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-# Price fetch endpoint
-@app.route('/prices')
+# Cache API prices to reduce rate limit hits
+def get_cached_prices():
+    now = time.time()
+    if "timestamp" in PRICE_CACHE and now - PRICE_CACHE["timestamp"] < CACHE_DURATION:
+        return PRICE_CACHE["data"]
+
+    try:
+        r = requests.get("https://api.coingecko.com/api/v3/simple/price",
+                         params={"ids": "bitcoin,ethereum", "vs_currencies": "usd"})
+        r.raise_for_status()
+        data = r.json()
+        PRICE_CACHE["data"] = data
+        PRICE_CACHE["timestamp"] = now
+        return data
+    except Exception as e:
+        print("Error fetching prices:", e)
+        return {}
+
+@app.route("/")
+def dashboard():
+    settings = load_settings()
+    return render_template("dashboard.html", settings=settings)
+
+@app.route("/prices")
 def prices():
-    try:
-        response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd")
-        response.raise_for_status()
-        data = response.json()
-        return jsonify({
-            "BTC": data.get("bitcoin", {}).get("usd", "N/A"),
-            "ETH": data.get("ethereum", {}).get("usd", "N/A")
-        })
-    except Exception as e:
-        print(f"Error fetching prices: {e}")
-        return jsonify({"BTC": "Error", "ETH": "Error"}), 500
+    data = get_cached_prices()
+    return jsonify(data)
 
-# Chart data simulation
-@app.route('/chart-data')
-def chart_data():
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        c = conn.cursor()
-        c.execute("SELECT timestamp, profit, capital, trades FROM performance ORDER BY timestamp ASC")
-        data = c.fetchall()
-        conn.close()
-        return jsonify([{
-            'time': row[0],
-            'profit': row[1],
-            'capital': row[2],
-            'trades': row[3]
-        } for row in data])
-    except:
-        return jsonify([])
-
-# Get settings
-@app.route('/settings')
-def get_settings():
-    return jsonify(load_settings())
-
-# Save settings
-@app.route('/settings', methods=['POST'])
+@app.route("/update_settings", methods=["POST"])
 def update_settings():
-    try:
-        data = request.get_json()
-        save_settings(data)
-        return jsonify({"status": "success"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    form = request.form
+    settings = {
+        "stake": float(form.get("stake", 5)),
+        "target_profit": float(form.get("target_profit", 5)),
+        "max_trades": int(form.get("max_trades", 20)),
+        "cooldown": int(form.get("cooldown", 1)),
+        "reinvest": form.get("reinvest") == "true"
+    }
+    save_settings(settings)
+    return "Updated", 200
 
-# Backtest endpoint
-@app.route('/backtest', methods=['POST'])
-def backtest():
-    try:
-        # Dummy simulation
-        return jsonify({"status": "complete", "message": "Backtest simulation complete"})
-    except:
-        return jsonify({"status": "error"})
+@app.route("/simulate_backtest")
+def simulate_backtest():
+    fake_data = []
+    capital = 100
+    for i in range(20):
+        capital += capital * 0.02
+        fake_data.append({
+            "time": f"T{i+1}",
+            "capital": round(capital, 2),
+            "profit": round(capital - 100, 2),
+            "trades": i+1
+        })
+    return jsonify(fake_data)
 
-# Main dashboard
-@app.route('/')
-def index():
-    return render_template('dashboard.html')
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
