@@ -246,6 +246,21 @@ def real_growth():
         capital += row[1]
         data.append(round(capital, 2))
     return jsonify(data)
+from binance.client import Client
+@app.route('/binance_balance')
+def binance_balance():
+    try:
+        balances = binance_client.get_account()['balances']
+        clean = {b['asset']: float(b['free']) for b in balances if float(b['free']) > 0}
+        return jsonify(clean)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
+BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
+BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
+binance_client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
+
 
 @app.route('/backtest', methods=['POST'])
 def backtest():
