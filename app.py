@@ -1,84 +1,78 @@
 from flask import Flask, render_template, request, jsonify
-import requests
 import json
 import os
-import datetime
-import random
+import requests
+import sqlite3
+from datetime import datetime
 
 app = Flask(__name__)
 
-SETTINGS_FILE = 'settings.json'
+SETTINGS_FILE = "settings.json"
 
-# Load or initialize settings
+# Load settings
+if not os.path.exists(SETTINGS_FILE):
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump({
+            "stake": 5,
+            "target_profit": 5,
+            "max_trades": 20,
+            "cooldown": 1,
+            "reinvest": True
+        }, f)
+
 def load_settings():
-    if os.path.exists(SETTINGS_FILE):
-        with open(SETTINGS_FILE, 'r') as f:
-            return json.load(f)
-    return {
-        "stake": 5,
-        "target_profit": 5,
-        "max_trades": 20,
-        "cooldown": 1,
-        "reinvest": True
-    }
+    with open(SETTINGS_FILE) as f:
+        return json.load(f)
 
-def save_settings(settings):
-    with open(SETTINGS_FILE, 'w') as f:
-        json.dump(settings, f, indent=2)
+def save_settings(data):
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-@app.route('/')
-def index():
-    settings = load_settings()
-    return render_template('dashboard.html', settings=settings)
+@app.route("/")
+def dashboard():
+    return render_template("dashboard.html", settings=load_settings())
 
-@app.route('/prices')
-def get_prices():
+@app.route("/settings", methods=["GET", "POST"])
+def update_settings():
+    if request.method == "POST":
+        data = request.json
+        save_settings(data)
+        return jsonify({"message": "Settings saved"})
+    return jsonify(load_settings())
+
+@app.route("/prices")
+def prices():
     try:
-        url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd'
-        response = requests.get(url)
+        url = "https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            "ids": "bitcoin,ethereum",
+            "vs_currencies": "usd"
+        }
+        response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
         return jsonify({
-            "btc": data["bitcoin"]["usd"],
-            "eth": data["ethereum"]["usd"]
+            "bitcoin": data.get("bitcoin", {}).get("usd"),
+            "ethereum": data.get("ethereum", {}).get("usd")
         })
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         print("Error fetching prices:", e)
-        return jsonify({"btc": None, "eth": None})
+        return jsonify({"error": "Price fetch error"}), 500
 
-@app.route('/settings', methods=['GET', 'POST'])
-def settings():
-    if request.method == 'POST':
-        data = request.json
-        save_settings(data)
-        return jsonify({"status": "saved"})
-    return jsonify(load_settings())
-
-@app.route('/real_growth')
+@app.route("/real_growth")
 def real_growth():
-    now = datetime.datetime.now()
-    data = []
-    base = 100
-    for i in range(20):
-        point = {
-            "timestamp": (now - datetime.timedelta(minutes=19 - i)).strftime('%H:%M'),
-            "capital": base + i * random.uniform(0.1, 0.5),
-            "profit": i * random.uniform(0.1, 0.4),
-            "trades": i
-        }
-        data.append(point)
-    return jsonify(data)
+    now = datetime.now().strftime("%H:%M:%S")
+    return jsonify({"time": now, "profit": round(100 + datetime.now().second * 0.5, 2)})
 
-@app.route('/backtest')
+@app.route("/backtest")
 def backtest():
-    results = {
-        "total_trades": 45,
-        "successful": 38,
-        "failed": 7,
-        "profit": round(38 * 1.3 - 7 * 1.0, 2),
-        "capital_growth": round(100 + 38 * 1.3 - 7 * 1.0, 2)
+    result = {
+        "trades": 150,
+        "win_rate": "62.5%",
+        "roi": "+18.3%",
+        "duration": "3 months"
     }
-    return jsonify(results)
+    return jsonify(result)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
