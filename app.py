@@ -1,78 +1,84 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
+import json
 import sqlite3
-import os
-from datetime import datetime, timedelta
-import random
+import time
+from binance_utils import load_binance_client, get_balance, place_market_order
 
 app = Flask(__name__)
+DB_FILE = "trades.db"
+SETTINGS_FILE = "settings.json"
 
-DB_PATH = "trades.db"
+# Load settings
+def load_settings():
+    with open(SETTINGS_FILE) as f:
+        return json.load(f)
 
-def create_table():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS trades (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            capital REAL,
-            profit REAL,
-            trade_count INTEGER
-        )
-    ''')
-    conn.commit()
+# Save settings
+def save_settings(data):
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+# Initialize Binance
+settings = load_settings()
+binance_client = load_binance_client()
+
+@app.route("/")
+def dashboard():
+    return render_template("dashboard.html", settings=settings)
+
+@app.route("/settings", methods=["GET", "POST"])
+def update_settings():
+    if request.method == "POST":
+        new_settings = request.json
+        save_settings(new_settings)
+        return jsonify({"message": "Settings saved"})
+    else:
+        return jsonify(load_settings())
+
+@app.route("/binance_balance")
+def binance_balance():
+    try:
+        usdt = get_balance(binance_client, "USDT")
+        btc = get_balance(binance_client, "BTC")
+        eth = get_balance(binance_client, "ETH")
+        return jsonify({"USDT": usdt, "BTC": btc, "ETH": eth})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/trade_example")
+def trade_example():
+    result = place_market_order(binance_client, "BTCUSDT", "buy", 0.001)
+    return jsonify(result)
+
+@app.route("/real_growth")
+def real_growth():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT timestamp, capital, profit, trade_count FROM performance")
+    data = cursor.fetchall()
+    conn.close()
+    result = {
+        "timestamps": [row[0] for row in data],
+        "capital": [row[1] for row in data],
+        "profit": [row[2] for row in data],
+        "trades": [row[3] for row in data],
+    }
+    return jsonify(result)
+
+@app.route("/export_trades")
+def export_trades():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM trades")
+    rows = cursor.fetchall()
     conn.close()
 
-@app.route('/')
-def index():
-    return render_template('dashboard.html')
+    csv_path = "trades_export.csv"
+    with open(csv_path, "w") as f:
+        f.write("id,timestamp,pair,action,price,quantity,profit\n")
+        for row in rows:
+            f.write(",".join(str(x) for x in row) + "\n")
+    return send_file(csv_path, as_attachment=True)
 
-@app.route('/get_chart_data')
-def get_chart_data():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT timestamp, capital, profit, trade_count FROM trades ORDER BY timestamp ASC")
-    rows = c.fetchall()
-    conn.close()
-
-    timestamps = [row[0] for row in rows]
-    capital = [row[1] for row in rows]
-    profit = [row[2] for row in rows]
-    trades = [row[3] for row in rows]
-
-    return jsonify({
-        "timestamps": timestamps,
-        "capital": capital,
-        "profit": profit,
-        "trades": trades
-    })
-
-@app.route('/seed_chart')
-def seed_chart():
-    create_table()
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("DELETE FROM trades")  # Clear existing data
-
-    base_capital = 1000
-    base_profit = 0
-    total_trades = 0
-    now = datetime.now()
-
-    for i in range(10):
-        timestamp = (now - timedelta(minutes=(9 - i) * 5)).strftime('%H:%M')
-        trade_profit = random.uniform(-10, 15)
-        base_profit += trade_profit
-        base_capital += trade_profit
-        total_trades += random.randint(1, 3)
-
-        c.execute("INSERT INTO trades (timestamp, capital, profit, trade_count) VALUES (?, ?, ?, ?)",
-                  (timestamp, round(base_capital, 2), round(base_profit, 2), total_trades))
-
-    conn.commit()
-    conn.close()
-    return "Sample chart data seeded."
-
-if __name__ == '__main__':
-    create_table()
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
