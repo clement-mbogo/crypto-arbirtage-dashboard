@@ -30,6 +30,8 @@ def load_settings():
             "cooldown": 60,
             "reinvest": True,
             "mode": "paper"
+spread = round(random.uniform(0.5, 2.5), 2)
+
         }
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(default, f)
@@ -360,6 +362,7 @@ def login():
     # Simple login stub (for demo). Replace with proper auth.
     session['user'] = 'admin'
     return redirect(url_for('index'))
+
 
 @app.route('/logout')
 def logout():
