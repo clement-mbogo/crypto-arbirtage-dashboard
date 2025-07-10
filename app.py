@@ -8,6 +8,8 @@ from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 import requests
 from dotenv import load_dotenv
+from binance.client import Client
+
 load_dotenv()
 
 # === CONFIGURATION ===
@@ -30,8 +32,6 @@ def load_settings():
             "cooldown": 60,
             "reinvest": True,
             "mode": "paper"
-spread = round(random.uniform(0.5, 2.5), 2)
-
         }
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(default, f)
@@ -288,59 +288,51 @@ def real_growth():
         capital += row[1]
         data.append(round(capital, 2))
     return jsonify(data)
+
 def fetch_all_cex_prices():
     prices = {}
-    
-    # Binance
     try:
         binance = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT').json()
         prices['Binance'] = float(binance['price'])
     except:
         prices['Binance'] = 0
 
-    # KuCoin
     try:
-        res = requests.get('https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=BTC-USDT').json()
-        prices['KuCoin'] = float(res['data']['price'])
+        kucoin = requests.get('https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=BTC-USDT').json()
+        prices['KuCoin'] = float(kucoin['data']['price'])
     except:
         prices['KuCoin'] = 0
 
-    # Gate.io
     try:
         gate = requests.get('https://api.gate.io/api2/1/ticker/BTC_USDT').json()
         prices['Gate.io'] = float(gate['last'])
     except:
         prices['Gate.io'] = 0
 
-    # Bybit
     try:
         bybit = requests.get('https://api.bybit.com/v2/public/tickers?symbol=BTCUSDT').json()
         prices['Bybit'] = float(bybit['result'][0]['last_price'])
     except:
         prices['Bybit'] = 0
 
-    # Kraken
     try:
         kraken = requests.get('https://api.kraken.com/0/public/Ticker?pair=XBTUSD').json()
         prices['Kraken'] = float(kraken['result']['XXBTZUSD']['c'][0])
     except:
         prices['Kraken'] = 0
 
-    # Coinbase
     try:
         cb = requests.get('https://api.coinbase.com/v2/prices/BTC-USD/spot').json()
         prices['Coinbase'] = float(cb['data']['amount'])
     except:
         prices['Coinbase'] = 0
 
-    # HTX (formerly Huobi)
     try:
         htx = requests.get('https://api.huobi.pro/market/detail/merged?symbol=btcusdt').json()
         prices['HTX'] = float(htx['tick']['close'])
     except:
         prices['HTX'] = 0
 
-    # MEXC
     try:
         mexc = requests.get('https://api.mexc.com/api/v3/ticker/price?symbol=BTCUSDT').json()
         prices['MEXC'] = float(mexc['price'])
@@ -351,37 +343,29 @@ def fetch_all_cex_prices():
 
 @app.route('/compare_prices')
 def compare_prices():
-    prices = fetch_all_cex_prices()
-    return jsonify(prices)
-
-
+    return jsonify(fetch_all_cex_prices())
 
 # === AUTH ROUTES ===
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # Simple login stub (for demo). Replace with proper auth.
     session['user'] = 'admin'
     return redirect(url_for('index'))
-
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# === BINANCE TESTNET SETUP ===
-from binance.client import Client
-
+# === BINANCE TESTNET / MAINNET CLIENT ===
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
-
 binance_client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
 
 settings = load_settings()
 if settings.get('mode') == 'paper':
-    binance_client.API_URL = 'https://testnet.binance.vision/api'  # Still simulate
+    binance_client.API_URL = 'https://testnet.binance.vision/api'
 else:
-    binance_client.API_URL = 'https://api.binance.com/api'  # Mainnet for real trading
+    binance_client.API_URL = 'https://api.binance.com/api'
 
 @app.route('/binance_balance')
 def binance_balance():
