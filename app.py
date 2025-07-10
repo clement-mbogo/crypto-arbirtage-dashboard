@@ -1,58 +1,68 @@
-from flask import Flask, render_template, jsonify, request
-import json
-import os
-from datetime import datetime
-import random
+from flask import Flask, jsonify
+from flask_cors import CORS
+import sqlite3
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
+CORS(app)  # Allow cross-origin requests from frontend
 
-# === Load settings from JSON ===
-SETTINGS_FILE = 'settings.json'
+# --- Initialize Database ---
+def init_db():
+    conn = sqlite3.connect('trades.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS performance (
+            timestamp TEXT,
+            capital REAL,
+            profit REAL,
+            trade_count INTEGER
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-def load_settings():
-    if not os.path.exists(SETTINGS_FILE):
-        return {
-            "stake": 5,
-            "target_profit": 5,
-            "max_trades": 20,
-            "cooldown": 60,
-            "reinvest": True
-        }
-    with open(SETTINGS_FILE, 'r') as f:
-        return json.load(f)
+# --- Optional: Seed with Sample Data ---
+def seed_sample_data():
+    conn = sqlite3.connect('trades.db')
+    cursor = conn.cursor()
 
-# === Routes ===
-@app.route('/')
-def dashboard():
-    return render_template('dashboard.html')
+    # Check if there's already data
+    cursor.execute("SELECT COUNT(*) FROM performance")
+    if cursor.fetchone()[0] > 0:
+        conn.close()
+        return  # Already seeded
 
-@app.route('/get_settings')
-def get_settings():
-    return jsonify(load_settings())
+    start = datetime.now() - timedelta(hours=10)
+    for i in range(20):
+        ts = (start + timedelta(minutes=30 * i)).strftime('%H:%M')
+        cap = 1000 + i * 5
+        prof = i * 2
+        trades = i
+        cursor.execute("INSERT INTO performance VALUES (?, ?, ?, ?)", (ts, cap, prof, trades))
 
-@app.route('/get_prices')
-def get_prices():
-    # Simulated live prices
-    return jsonify({
-        "BTC": round(29250 + random.uniform(-50, 50), 2),
-        "ETH": round(1875 + random.uniform(-10, 10), 2)
-    })
+    conn.commit()
+    conn.close()
 
+# --- Chart Data Endpoint ---
 @app.route('/get_chart_data')
 def get_chart_data():
-    # Simulated chart data (should be replaced with actual DB or bot data)
-    timestamps = [(datetime.now().strftime("%H:%M")) for _ in range(5)]
-    capital = [100, 110, 115, 113, 120]
-    profit = [0, 10, 15, 13, 20]
-    trade_count = [0, 1, 2, 3, 4]
+    conn = sqlite3.connect('trades.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT timestamp, capital, profit, trade_count FROM performance ORDER BY timestamp")
+    rows = cursor.fetchall()
+    conn.close()
 
-    return jsonify({
-        "labels": timestamps,
-        "capital": capital,
-        "profit": profit,
-        "trade_count": trade_count
-    })
+    chart_data = {
+        'labels': [row[0] for row in rows],
+        'capital': [row[1] for row in rows],
+        'profit': [row[2] for row in rows],
+        'trades': [row[3] for row in rows]
+    }
 
-# === Run the app locally ===
+    return jsonify(chart_data)
+
+# --- Main Entrypoint ---
 if __name__ == '__main__':
-    app.run(debug=True)
+    init_db()
+    seed_sample_data()  # Comment this out if using real bot data
+    app.run(debug=True, port=5000)
