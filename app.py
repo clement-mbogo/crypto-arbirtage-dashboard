@@ -373,7 +373,12 @@ BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
 
 binance_client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
-binance_client.API_URL = 'https://testnet.binance.vision/api'
+
+settings = load_settings()
+if settings.get('mode') == 'paper':
+    binance_client.API_URL = 'https://testnet.binance.vision/api'  # Still simulate
+else:
+    binance_client.API_URL = 'https://api.binance.com/api'  # Mainnet for real trading
 
 @app.route('/binance_balance')
 def binance_balance():
