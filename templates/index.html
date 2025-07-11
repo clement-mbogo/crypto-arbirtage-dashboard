@@ -1,0 +1,56 @@
+<div class="controls">
+  <label for="modeToggle">Mode:</label>
+  <select id="modeToggle" onchange="toggleMode()">
+    <option value="live" selected>Live</option>
+    <option value="backtest">Backtest</option>
+  </select>
+</div>
+
+<div id="chartContainer" style="height: 400px; width: 100%; margin-top: 20px;"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  async function toggleMode() {
+    const mode = document.getElementById("modeToggle").value;
+    const res = await fetch(`/${mode}_growth`);
+    const data = await res.json();
+    renderChart(data);
+  }
+
+  function renderChart(data) {
+    const ctx = document.getElementById("growthChart")?.getContext("2d") ||
+                createChartCanvas().getContext("2d");
+
+    if (window.growthChart) window.growthChart.destroy();
+
+    window.growthChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.timestamps,
+        datasets: [
+          {
+            label: "Capital",
+            data: data.capital,
+            borderColor: "#36a2eb",
+            fill: false
+          },
+          {
+            label: "Profit",
+            data: data.profit,
+            borderColor: "#4caf50",
+            fill: false
+          }
+        ]
+      }
+    });
+  }
+
+  function createChartCanvas() {
+    const container = document.getElementById("chartContainer");
+    container.innerHTML = '<canvas id="growthChart"></canvas>';
+    return document.getElementById("growthChart");
+  }
+
+  // Load default live chart on page load
+  window.onload = toggleMode;
+</script>
