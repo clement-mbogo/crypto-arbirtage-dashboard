@@ -10,7 +10,7 @@ app.secret_key = 'your-secret-key'
 app.permanent_session_lifetime = timedelta(minutes=30)
 
 DB_FILE = 'database/performance.db'
-USERS_FILE = 'dashboard/templates/users.json'
+USERS_FILE = os.path.join(os.path.dirname(__file__), 'templates', 'users.json')
 
 # Auto-create database and seed test data if needed
 def init_db():
@@ -48,8 +48,12 @@ init_db()
 
 # Load user data from file
 def load_users():
-    with open(USERS_FILE, 'r') as f:
-        return json.load(f)
+    try:
+        with open(USERS_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading users: {e}")
+        return {}
 
 # Save session-level OTP
 def generate_otp():
@@ -69,7 +73,7 @@ def login():
             session['username'] = username
             session['otp'] = generate_otp()
             session['2fa_verified'] = False
-            flash(f"Your OTP is: {session['otp']}", "info")  # Replace with email logic if needed
+            flash(f"Your OTP is: {session['otp']}", "info")
             return redirect(url_for('two_fa'))
         else:
             flash("Invalid credentials", "danger")
