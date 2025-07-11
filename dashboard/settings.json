@@ -1,0 +1,10 @@
+{
+  "api_key": "sJXrYQOQ7YAAadB5RX5PC7yGlVgyzoiwJIlGstfRZMcyGsZIGzjH9Up1u4SbA3U1",
+  "api_secret": "qP4nzkCcsBc4jL1blB2Z1W4XmaahPs0jJ6wErMpRPfw7nivULkdETqA1CbRB0gaa",
+  "use_testnet": true,
+  "live_mode": false,
+  "stake": 5,
+  "target_profit": 5,
+  "cooldown": 60,
+  "reinvest": true
+}

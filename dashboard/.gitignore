@@ -1,0 +1,12 @@
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.db
+.env
+.venv/
+venv/
+cert.pem
+key.pem
+settings/*.json
+logs/
