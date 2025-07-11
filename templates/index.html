@@ -1,56 +1,112 @@
-<div class="controls">
-  <label for="modeToggle">Mode:</label>
-  <select id="modeToggle" onchange="toggleMode()">
-    <option value="live" selected>Live</option>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Crypto Arbitrage Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial;
+      background: #f0f2f5;
+      padding: 20px;
+    }
+    h2 {
+      margin-bottom: 10px;
+    }
+    select {
+      margin: 10px 10px 20px 0;
+      padding: 6px;
+    }
+    canvas {
+      background: #fff;
+      border-radius: 8px;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>📊 Crypto Arbitrage Performance Dashboard</h2>
+
+  <label for="chartMode">Mode:</label>
+  <select id="chartMode" onchange="renderChart()">
+    <option value="live">Live</option>
     <option value="backtest">Backtest</option>
+    <option value="combined">Combined</option>
   </select>
-</div>
 
-<div id="chartContainer" style="height: 400px; width: 100%; margin-top: 20px;"></div>
+  <label for="typeSelect">Chart Type:</label>
+  <select id="typeSelect" onchange="renderChart()">
+    <option value="capital">Capital</option>
+    <option value="profit">Profit</option>
+    <option value="trade_count">Trade Count</option>
+  </select>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  async function toggleMode() {
-    const mode = document.getElementById("modeToggle").value;
-    const res = await fetch(`/${mode}_growth`);
-    const data = await res.json();
-    renderChart(data);
-  }
+  <canvas id="growthChart" height="100"></canvas>
 
-  function renderChart(data) {
-    const ctx = document.getElementById("growthChart")?.getContext("2d") ||
-                createChartCanvas().getContext("2d");
+  <script>
+    let realData = {}, backtestData = {};
 
-    if (window.growthChart) window.growthChart.destroy();
-
-    window.growthChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: data.timestamps,
-        datasets: [
-          {
-            label: "Capital",
-            data: data.capital,
-            borderColor: "#36a2eb",
-            fill: false
-          },
-          {
-            label: "Profit",
-            data: data.profit,
-            borderColor: "#4caf50",
-            fill: false
-          }
-        ]
+    async function fetchData() {
+      try {
+        const [real, backtest] = await Promise.all([
+          fetch('/real_growth').then(res => res.json()),
+          fetch('/backtest_growth').then(res => res.json())
+        ]);
+        realData = real;
+        backtestData = backtest;
+        renderChart();
+      } catch (err) {
+        alert('Failed to load data.');
+        console.error(err);
       }
-    });
-  }
+    }
 
-  function createChartCanvas() {
-    const container = document.getElementById("chartContainer");
-    container.innerHTML = '<canvas id="growthChart"></canvas>';
-    return document.getElementById("growthChart");
-  }
+    function renderChart() {
+      const ctx = document.getElementById("growthChart").getContext("2d");
+      const type = document.getElementById("typeSelect").value;
+      const mode = document.getElementById("chartMode").value;
 
-  // Load default live chart on page load
-  window.onload = toggleMode;
-</script>
+      if (window.myChart) window.myChart.destroy();
+
+      const datasets = [];
+
+      if (mode === "live" || mode === "combined") {
+        datasets.push({
+          label: "Live",
+          data: realData[type],
+          borderColor: "blue",
+          fill: false
+        });
+      }
+
+      if (mode === "backtest" || mode === "combined") {
+        datasets.push({
+          label: "Backtest",
+          data: backtestData[type],
+          borderColor: "green",
+          fill: false
+        });
+      }
+
+      window.myChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: realData.timestamps || backtestData.timestamps,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom' },
+            title: {
+              display: true,
+              text: `${type.toUpperCase()} (${mode.charAt(0).toUpperCase() + mode.slice(1)})`
+            }
+          }
+        }
+      });
+    }
+
+    fetchData();
+  </script>
+</body>
+</html>
