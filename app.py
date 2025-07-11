@@ -1,84 +1,75 @@
-from flask import Flask, render_template, request, jsonify, send_file
-import json
+from flask import Flask, render_template, jsonify
 import sqlite3
-import time
-from binance_utils import load_binance_client, get_balance, place_market_order
+import os
+from datetime import datetime, timedelta
+import random
+from binance_utils import load_binance_client, get_balance
 
 app = Flask(__name__)
-DB_FILE = "trades.db"
-SETTINGS_FILE = "settings.json"
 
-# Load settings
-def load_settings():
-    with open(SETTINGS_FILE) as f:
-        return json.load(f)
+DB_FILE = "bot.db"
 
-# Save settings
-def save_settings(data):
-    with open(SETTINGS_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+def init_db():
+    if not os.path.exists(DB_FILE):
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE performance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                capital REAL NOT NULL,
+                profit REAL NOT NULL,
+                trade_count INTEGER NOT NULL
+            )
+        ''')
+        conn.commit()
+        conn.close()
 
-# Initialize Binance
-settings = load_settings()
-binance_client = load_binance_client()
+def seed_fake_data():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    base_capital = 10000
+    for i in range(14):
+        timestamp = (datetime.now() - timedelta(days=14 - i)).strftime('%Y-%m-%d')
+        profit = round(random.uniform(20, 200), 2)
+        capital = round(base_capital + profit * i, 2)
+        trades = random.randint(5, 20)
+        cursor.execute("INSERT INTO performance (timestamp, capital, profit, trade_count) VALUES (?, ?, ?, ?)",
+                       (timestamp, capital, profit, trades))
+    conn.commit()
+    conn.close()
+
+# ✅ Initialize on startup
+init_db()
+seed_fake_data()  # 🔁 COMMENT this out after DB is seeded once
 
 @app.route("/")
-def dashboard():
-    return render_template("dashboard.html", settings=settings)
-
-@app.route("/settings", methods=["GET", "POST"])
-def update_settings():
-    if request.method == "POST":
-        new_settings = request.json
-        save_settings(new_settings)
-        return jsonify({"message": "Settings saved"})
-    else:
-        return jsonify(load_settings())
+def index():
+    return render_template("index.html")
 
 @app.route("/binance_balance")
 def binance_balance():
-    try:
-        usdt = get_balance(binance_client, "USDT")
-        btc = get_balance(binance_client, "BTC")
-        eth = get_balance(binance_client, "ETH")
-        return jsonify({"USDT": usdt, "BTC": btc, "ETH": eth})
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-@app.route("/trade_example")
-def trade_example():
-    result = place_market_order(binance_client, "BTCUSDT", "buy", 0.001)
-    return jsonify(result)
+    client = load_binance_client(testnet=True)
+    usdt = get_balance(client, "USDT")
+    btc = get_balance(client, "BTC")
+    eth = get_balance(client, "ETH")
+    return jsonify({"USDT": usdt, "BTC": btc, "ETH": eth})
 
 @app.route("/real_growth")
 def real_growth():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT timestamp, capital, profit, trade_count FROM performance")
-    data = cursor.fetchall()
-    conn.close()
-    result = {
-        "timestamps": [row[0] for row in data],
-        "capital": [row[1] for row in data],
-        "profit": [row[2] for row in data],
-        "trades": [row[3] for row in data],
-    }
-    return jsonify(result)
-
-@app.route("/export_trades")
-def export_trades():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM trades")
     rows = cursor.fetchall()
     conn.close()
 
-    csv_path = "trades_export.csv"
-    with open(csv_path, "w") as f:
-        f.write("id,timestamp,pair,action,price,quantity,profit\n")
-        for row in rows:
-            f.write(",".join(str(x) for x in row) + "\n")
-    return send_file(csv_path, as_attachment=True)
+    data = {
+        "labels": [row[0] for row in rows],
+        "capital": [row[1] for row in rows],
+        "profit": [row[2] for row in rows],
+        "trades": [row[3] for row in rows],
+    }
+    return jsonify(data)
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True)
