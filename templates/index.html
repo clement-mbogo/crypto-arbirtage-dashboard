@@ -9,9 +9,6 @@
       background: #f0f2f5;
       padding: 20px;
     }
-    h2 {
-      margin-bottom: 10px;
-    }
     select {
       margin: 10px 10px 20px 0;
       padding: 6px;
@@ -20,6 +17,20 @@
       background: #fff;
       border-radius: 8px;
       padding: 10px;
+    }
+    table {
+      width: 100%;
+      background: #fff;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    th {
+      background: #f2f2f2;
     }
   </style>
 </head>
@@ -42,6 +53,30 @@
 
   <canvas id="growthChart" height="100"></canvas>
 
+  <h3>📋 Performance Table</h3>
+  <table id="performanceTable">
+    <thead>
+      <tr>
+        <th>Month</th>
+        <th>Capital</th>
+        <th>Profit</th>
+        <th>Trade Count</th>
+        <th>Type</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <h3>💹 Live Price Widget</h3>
+  <label for="exchangeSelect">Exchange:</label>
+  <select id="exchangeSelect" onchange="updatePriceWidget()">
+    <option value="BINANCE:BTCUSDT">Binance</option>
+    <option value="KRAKEN:XBTUSD">Kraken</option>
+    <option value="COINBASE:BTCUSD">Coinbase</option>
+  </select>
+
+  <iframe id="tvWidget" width="100%" height="220" frameborder="0" allowtransparency="true" scrolling="no"></iframe>
+
   <script>
     let realData = {}, backtestData = {};
 
@@ -54,6 +89,7 @@
         realData = real;
         backtestData = backtest;
         renderChart();
+        updatePriceWidget();
       } catch (err) {
         alert('Failed to load data.');
         console.error(err);
@@ -87,10 +123,14 @@
         });
       }
 
+      const labels = (mode === "backtest")
+        ? backtestData.timestamps
+        : realData.timestamps;
+
       window.myChart = new Chart(ctx, {
         type: "line",
         data: {
-          labels: realData.timestamps || backtestData.timestamps,
+          labels: labels,
           datasets: datasets
         },
         options: {
@@ -104,6 +144,37 @@
           }
         }
       });
+
+      updateTable();
+    }
+
+    function updateTable() {
+      const tbody = document.querySelector("#performanceTable tbody");
+      tbody.innerHTML = "";
+      const mode = document.getElementById("chartMode").value;
+
+      const addRow = (data, label) => {
+        data.timestamps.forEach((t, i) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${t}</td>
+            <td>${data.capital[i]}</td>
+            <td>${data.profit[i]}</td>
+            <td>${data.trade_count[i]}</td>
+            <td>${label}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      };
+
+      if (mode === "live" || mode === "combined") addRow(realData, "Live");
+      if (mode === "backtest" || mode === "combined") addRow(backtestData, "Backtest");
+    }
+
+    function updatePriceWidget() {
+      const exchange = document.getElementById("exchangeSelect").value;
+      const widget = document.getElementById("tvWidget");
+      widget.src = `https://s.tradingview.com/embed-widget/mini-symbol-overview/?locale=en#%7B%22symbol%22%3A%22${exchange}%22%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22220%22%2C%22colorTheme%22%3A%22light%22%2C%22isTransparent%22%3Afalse%7D`;
     }
 
     fetchData();
