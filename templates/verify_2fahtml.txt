@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Verify 2FA</title>
+  <style>
+    body {
+      background-color: #1b1b2f;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    form {
+      background: #2a2a40;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px #000;
+    }
+    input[type=text], input[type=submit] {
+      padding: 10px;
+      margin: 5px 0;
+      border: none;
+      border-radius: 5px;
+      width: 100%;
+    }
+    input[type=submit] {
+      background: #00c896;
+      color: white;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <form method="post">
+    <h2>2FA Verification</h2>
+    <input type="text" name="code" placeholder="Enter code sent to Telegram" required>
+    <input type="submit" value="Verify">
+  </form>
+</body>
+</html>
