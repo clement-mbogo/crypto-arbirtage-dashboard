@@ -1,183 +1,171 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Crypto Arbitrage Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body {
-      font-family: Arial;
-      background: #f0f2f5;
-      padding: 20px;
-    }
-    select {
-      margin: 10px 10px 20px 0;
-      padding: 6px;
-    }
-    canvas {
-      background: #fff;
-      border-radius: 8px;
-      padding: 10px;
-    }
-    table {
-      width: 100%;
-      background: #fff;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    th, td {
-      padding: 8px;
-      border: 1px solid #ccc;
-      text-align: center;
-    }
-    th {
-      background: #f2f2f2;
-    }
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body>
-  <h2>📊 Crypto Arbitrage Performance Dashboard</h2>
+<body class="bg-gray-100 text-gray-800">
+  <div class="max-w-6xl mx-auto p-4">
+    <h1 class="text-3xl font-bold mb-4">📊 Crypto Arbitrage Bot Dashboard</h1>
 
-  <label for="chartMode">Mode:</label>
-  <select id="chartMode" onchange="renderChart()">
-    <option value="live">Live</option>
-    <option value="backtest">Backtest</option>
-    <option value="combined">Combined</option>
-  </select>
+    <!-- 📈 Chart Controls -->
+    <div class="flex flex-wrap gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-medium">Chart Mode:</label>
+        <select id="modeSelector" onchange="loadChart()" class="border rounded p-2">
+          <option value="real">Live</option>
+          <option value="backtest">Backtest</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Chart Type:</label>
+        <select id="chartType" onchange="loadChart()" class="border rounded p-2">
+          <option value="line">Line</option>
+          <option value="bar">Bar</option>
+        </select>
+      </div>
+    </div>
 
-  <label for="typeSelect">Chart Type:</label>
-  <select id="typeSelect" onchange="renderChart()">
-    <option value="capital">Capital</option>
-    <option value="profit">Profit</option>
-    <option value="trade_count">Trade Count</option>
-  </select>
+    <!-- 📉 Chart Canvas -->
+    <canvas id="performanceChart" class="bg-white p-4 rounded shadow-md"></canvas>
 
-  <canvas id="growthChart" height="100"></canvas>
+    <!-- 📋 Performance Table -->
+    <div class="mt-8">
+      <h2 class="text-xl font-semibold mb-2">Performance Data</h2>
+      <table class="min-w-full bg-white border">
+        <thead>
+          <tr>
+            <th class="px-4 py-2 border">Date</th>
+            <th class="px-4 py-2 border">Capital</th>
+            <th class="px-4 py-2 border">Profit</th>
+            <th class="px-4 py-2 border">Trades</th>
+          </tr>
+        </thead>
+        <tbody id="performanceTable" class="text-center"></tbody>
+      </table>
+    </div>
 
-  <h3>📋 Performance Table</h3>
-  <table id="performanceTable">
-    <thead>
-      <tr>
-        <th>Month</th>
-        <th>Capital</th>
-        <th>Profit</th>
-        <th>Trade Count</th>
-        <th>Type</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+    <!-- 📈 TradingView Widget -->
+    <div class="mt-8">
+      <h2 class="text-xl font-semibold mb-2">Live Market Prices</h2>
+      <iframe src="https://www.tradingview.com/widgetembed/?frameElementId=tradingview_c9f43&symbol=BINANCE:BTCUSDT&interval=1&theme=light&style=1&locale=en&toolbar_bg=f1f3f6" width="100%" height="400" frameborder="0"></iframe>
+    </div>
 
-  <h3>💹 Live Price Widget</h3>
-  <label for="exchangeSelect">Exchange:</label>
-  <select id="exchangeSelect" onchange="updatePriceWidget()">
-    <option value="BINANCE:BTCUSDT">Binance</option>
-    <option value="KRAKEN:XBTUSD">Kraken</option>
-    <option value="COINBASE:BTCUSD">Coinbase</option>
-  </select>
+    <!-- 🔁 Exchange Toggle -->
+    <div class="mt-8">
+      <label class="block text-sm font-medium mb-1">Exchange</label>
+      <select id="exchangeSelector" class="border rounded p-2">
+        <option>Binance</option>
+        <option>Kraken</option>
+        <option>Coinbase</option>
+      </select>
+    </div>
 
-  <iframe id="tvWidget" width="100%" height="220" frameborder="0" allowtransparency="true" scrolling="no"></iframe>
+    <!-- 🤖 Bot Control Panel -->
+    <div class="card p-4 mt-8 bg-white shadow rounded-xl">
+      <h2 class="text-xl font-semibold mb-4">🤖 Bot Control Panel</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label>💵 Stake</label>
+          <input type="number" id="stake" class="w-full border rounded p-2" value="50">
+        </div>
+        <div>
+          <label>🎯 Target Profit (%)</label>
+          <input type="number" id="targetProfit" class="w-full border rounded p-2" value="1.5">
+        </div>
+        <div>
+          <label>📉 Min Profit Before Entry (%)</label>
+          <input type="number" id="minProfit" class="w-full border rounded p-2" value="0.5">
+        </div>
+        <div>
+          <label>⏱️ Trade Delay (sec)</label>
+          <input type="number" id="tradeDelay" class="w-full border rounded p-2" value="30">
+        </div>
+        <div>
+          <label>🔁 Trade Mode</label>
+          <select id="tradeMode" class="w-full border rounded p-2">
+            <option value="paper">Paper</option>
+            <option value="real">Live</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex gap-4 mt-4">
+        <button onclick="startBot()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">▶️ Start</button>
+        <button onclick="pauseBot()" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">⏸️ Pause</button>
+        <button onclick="stopBot()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">⏹️ Stop</button>
+      </div>
+    </div>
+  </div>
 
   <script>
-    let realData = {}, backtestData = {};
+    let chart;
 
-    async function fetchData() {
-      try {
-        const [real, backtest] = await Promise.all([
-          fetch('/real_growth').then(res => res.json()),
-          fetch('/backtest_growth').then(res => res.json())
-        ]);
-        realData = real;
-        backtestData = backtest;
-        renderChart();
-        updatePriceWidget();
-      } catch (err) {
-        alert('Failed to load data.');
-        console.error(err);
-      }
-    }
+    function loadChart() {
+      const mode = document.getElementById("modeSelector").value;
+      const type = document.getElementById("chartType").value;
+      axios.get(`/${mode}_growth`).then(res => {
+        const data = res.data;
+        const labels = data.map(d => new Date(d.timestamp).toLocaleDateString());
+        const profits = data.map(d => d.profit);
 
-    function renderChart() {
-      const ctx = document.getElementById("growthChart").getContext("2d");
-      const type = document.getElementById("typeSelect").value;
-      const mode = document.getElementById("chartMode").value;
+        if (chart) chart.destroy();
 
-      if (window.myChart) window.myChart.destroy();
-
-      const datasets = [];
-
-      if (mode === "live" || mode === "combined") {
-        datasets.push({
-          label: "Live",
-          data: realData[type],
-          borderColor: "blue",
-          fill: false
-        });
-      }
-
-      if (mode === "backtest" || mode === "combined") {
-        datasets.push({
-          label: "Backtest",
-          data: backtestData[type],
-          borderColor: "green",
-          fill: false
-        });
-      }
-
-      const labels = (mode === "backtest")
-        ? backtestData.timestamps
-        : realData.timestamps;
-
-      window.myChart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: labels,
-          datasets: datasets
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { position: 'bottom' },
-            title: {
-              display: true,
-              text: `${type.toUpperCase()} (${mode.charAt(0).toUpperCase() + mode.slice(1)})`
-            }
+        chart = new Chart(document.getElementById("performanceChart"), {
+          type: type,
+          data: {
+            labels: labels,
+            datasets: [{
+              label: "Profit",
+              data: profits,
+              backgroundColor: "rgba(75,192,192,0.4)",
+              borderColor: "rgba(75,192,192,1)",
+              fill: true
+            }]
           }
-        }
-      });
-
-      updateTable();
-    }
-
-    function updateTable() {
-      const tbody = document.querySelector("#performanceTable tbody");
-      tbody.innerHTML = "";
-      const mode = document.getElementById("chartMode").value;
-
-      const addRow = (data, label) => {
-        data.timestamps.forEach((t, i) => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${t}</td>
-            <td>${data.capital[i]}</td>
-            <td>${data.profit[i]}</td>
-            <td>${data.trade_count[i]}</td>
-            <td>${label}</td>
-          `;
-          tbody.appendChild(tr);
         });
-      };
 
-      if (mode === "live" || mode === "combined") addRow(realData, "Live");
-      if (mode === "backtest" || mode === "combined") addRow(backtestData, "Backtest");
+        const tbody = document.getElementById("performanceTable");
+        tbody.innerHTML = "";
+        data.forEach(d => {
+          const row = `<tr><td class='border px-4 py-2'>${new Date(d.timestamp).toLocaleDateString()}</td>
+                        <td class='border px-4 py-2'>${d.capital.toFixed(2)}</td>
+                        <td class='border px-4 py-2'>${d.profit.toFixed(2)}</td>
+                        <td class='border px-4 py-2'>${d.trade_count}</td></tr>`;
+          tbody.innerHTML += row;
+        });
+      });
     }
 
-    function updatePriceWidget() {
-      const exchange = document.getElementById("exchangeSelect").value;
-      const widget = document.getElementById("tvWidget");
-      widget.src = `https://s.tradingview.com/embed-widget/mini-symbol-overview/?locale=en#%7B%22symbol%22%3A%22${exchange}%22%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22220%22%2C%22colorTheme%22%3A%22light%22%2C%22isTransparent%22%3Afalse%7D`;
+    function startBot() {
+      fetch('/start_bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stake: document.getElementById("stake").value,
+          targetProfit: document.getElementById("targetProfit").value,
+          minProfit: document.getElementById("minProfit").value,
+          tradeDelay: document.getElementById("tradeDelay").value,
+          tradeMode: document.getElementById("tradeMode").value
+        })
+      });
+      alert("🚀 Bot started");
     }
 
-    fetchData();
+    function pauseBot() {
+      fetch('/pause_bot', { method: 'POST' });
+      alert("⏸️ Bot paused");
+    }
+
+    function stopBot() {
+      fetch('/stop_bot', { method: 'POST' });
+      alert("⏹️ Bot stopped");
+    }
+
+    loadChart();
   </script>
 </body>
 </html>

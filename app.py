@@ -1,50 +1,59 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, request, jsonify
 import sqlite3
 import os
+from datetime import datetime
 
 app = Flask(__name__)
+DATABASE = 'performance.db'
 
-DB_PATH = os.getenv("DB_PATH", "performance.db")
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def fetch_data(source):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
-    query = f"SELECT timestamp, capital, profit, trade_count FROM performance WHERE source = ? ORDER BY timestamp"
+    query = """
+        SELECT timestamp, capital, profit, trade_count 
+        FROM performance 
+        WHERE source = ? 
+        ORDER BY timestamp ASC
+    """
     cursor.execute(query, (source,))
-    rows = cursor.fetchall()
+    data = cursor.fetchall()
     conn.close()
-    timestamps = [r[0] for r in rows]
-    capital = [r[1] for r in rows]
-    profit = [r[2] for r in rows]
-    trade_count = [r[3] for r in rows]
-    return {
-        "timestamps": timestamps,
-        "capital": capital,
-        "profit": profit,
-        "trade_count": trade_count
-    }
+    return [dict(row) for row in data]
 
-@app.route("/")
+@app.route('/')
 def index():
-    return render_template("index.html")
+    return render_template('index.html')
 
-@app.route("/real_growth")
+@app.route('/real_growth')
 def real_growth():
-    return jsonify(fetch_data("real"))
+    return jsonify(fetch_data('real'))
 
-@app.route("/backtest_growth")
+@app.route('/backtest_growth')
 def backtest_growth():
-    return jsonify(fetch_data("backtest"))
+    return jsonify(fetch_data('backtest'))
 
-@app.route("/start_backtest")
-def start_backtest():
-    # Simulate starting process or invoke backend script
-    return "Started"
+@app.route('/start_bot', methods=['POST'])
+def start_bot():
+    data = request.get_json()
+    print("Starting bot with settings:", data)
+    return jsonify({"status": "started"})
 
-@app.route("/stop_backtest")
-def stop_backtest():
-    # Simulate stopping process or invoke backend logic
-    return "Stopped"
+@app.route('/pause_bot', methods=['POST'])
+def pause_bot():
+    print("Bot paused")
+    return jsonify({"status": "paused"})
 
-if __name__ == "__main__":
+@app.route('/stop_bot', methods=['POST'])
+def stop_bot():
+    print("Bot stopped")
+    return jsonify({"status": "stopped"})
+
+if __name__ == '__main__':
+    if not os.path.exists(DATABASE):
+        print("⚠️ Database not found. Please run seed_db.py to generate test data.")
     app.run(debug=True)
