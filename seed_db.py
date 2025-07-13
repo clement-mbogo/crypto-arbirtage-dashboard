@@ -1,12 +1,8 @@
 import sqlite3
-import datetime
-import random
 
-# Connect (or create) performance.db
 conn = sqlite3.connect("performance.db")
 cursor = conn.cursor()
 
-# Create performance table
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS performance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,25 +14,19 @@ CREATE TABLE IF NOT EXISTS performance (
 )
 """)
 
-# Generate fake rows for 'real' and 'backtest'
-def insert_fake_data(source):
-    capital = 10000
-    profit = 0
-    for i in range(10):
-        capital += random.uniform(20, 150)
-        profit = capital - 10000
-        trade_count = i + 1
-        timestamp = (datetime.datetime.now() - datetime.timedelta(days=10 - i)).isoformat()
-        cursor.execute("""
-            INSERT INTO performance (timestamp, capital, profit, trade_count, source)
-            VALUES (?, ?, ?, ?, ?)
-        """, (timestamp, capital, profit, trade_count, source))
-
-# Insert both sources
-insert_fake_data("real")
-insert_fake_data("backtest")
+cursor.executemany("""
+INSERT INTO performance (timestamp, capital, profit, trade_count, source)
+VALUES (?, ?, ?, ?, ?)
+""", [
+    ("2025-06-01", 10000, 0, 0, "real"),
+    ("2025-06-02", 10100, 100, 3, "real"),
+    ("2025-06-03", 9800, -300, 5, "real"),
+    ("2025-06-01", 10000, 0, 0, "backtest"),
+    ("2025-06-02", 10200, 200, 2, "backtest"),
+    ("2025-06-03", 10350, 150, 4, "backtest")
+])
 
 conn.commit()
 conn.close()
 
-print("✅ Seeded performance.db with test data.")
+print("✅ performance.db created")

@@ -1,171 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
   <title>Crypto Arbitrage Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script>
+    async function runBacktest() {
+      const strategy = document.getElementById('strategy').value;
+      const steps = document.getElementById('steps').value;
+      await fetch(`/start_backtest?strategy=${strategy}&steps=${steps}`);
+      getBacktestLogs();
+    }
+
+    async function getBacktestLogs() {
+      const res = await fetch('/get_backtest_logs');
+      const data = await res.json();
+      document.getElementById("capital").innerText = `$${data.capital}`;
+      document.getElementById("pnl").innerText = `$${data.pnl}`;
+
+      const table = document.getElementById("log-table");
+      table.innerHTML = '<tr><th>Time</th><th>BTC</th><th>ETH</th><th>BNB</th><th>SOL</th></tr>';
+      for (const row of data.logs) {
+        table.innerHTML += `<tr>
+          <td>${row.time}</td>
+          <td>${row.BTC_Action || '-'}</td>
+          <td>${row.ETH_Action || '-'}</td>
+          <td>${row.BNB_Action || '-'}</td>
+          <td>${row.SOL_Action || '-'}</td>
+        </tr>`;
+      }
+
+      const summary = ["btc", "eth", "bnb", "sol"];
+      for (const coin of summary) {
+        const s = data[`${coin}_summary`];
+        document.getElementById(`${coin}_stats`).innerText = `${s.trades} Trades | ${s.win_rate}% Win | $${s.total}`;
+      }
+    }
+
+    async function resetSim() {
+      await fetch('/reset');
+      getBacktestLogs();
+    }
+
+    function saveLog(coin) {
+      fetch(`/save_${coin}_log`).then(() => alert(`${coin.toUpperCase()} log saved.`));
+    }
+
+    setInterval(getBacktestLogs, 5000);
+    window.onload = getBacktestLogs;
+  </script>
+  <style>
+    body { font-family: Arial; padding: 20px; background: #111; color: #eee; }
+    button { margin: 5px; padding: 5px 10px; cursor: pointer; }
+    table, th, td { border: 1px solid #444; border-collapse: collapse; padding: 4px; }
+    #charts iframe { margin: 5px; }
+    .section { margin: 20px 0; }
+  </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
-  <div class="max-w-6xl mx-auto p-4">
-    <h1 class="text-3xl font-bold mb-4">📊 Crypto Arbitrage Bot Dashboard</h1>
+<body>
+  <h2>📈 Crypto Arbitrage Dashboard</h2>
 
-    <!-- 📈 Chart Controls -->
-    <div class="flex flex-wrap gap-4 mb-4">
-      <div>
-        <label class="block text-sm font-medium">Chart Mode:</label>
-        <select id="modeSelector" onchange="loadChart()" class="border rounded p-2">
-          <option value="real">Live</option>
-          <option value="backtest">Backtest</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium">Chart Type:</label>
-        <select id="chartType" onchange="loadChart()" class="border rounded p-2">
-          <option value="line">Line</option>
-          <option value="bar">Bar</option>
-        </select>
-      </div>
-    </div>
+  <div class="section">
+    <label>Strategy:</label>
+    <select id="strategy">
+      <option value="random">Random</option>
+      <option value="threshold">Threshold</option>
+      <option value="spread">Spread-heavy</option>
+    </select>
 
-    <!-- 📉 Chart Canvas -->
-    <canvas id="performanceChart" class="bg-white p-4 rounded shadow-md"></canvas>
-
-    <!-- 📋 Performance Table -->
-    <div class="mt-8">
-      <h2 class="text-xl font-semibold mb-2">Performance Data</h2>
-      <table class="min-w-full bg-white border">
-        <thead>
-          <tr>
-            <th class="px-4 py-2 border">Date</th>
-            <th class="px-4 py-2 border">Capital</th>
-            <th class="px-4 py-2 border">Profit</th>
-            <th class="px-4 py-2 border">Trades</th>
-          </tr>
-        </thead>
-        <tbody id="performanceTable" class="text-center"></tbody>
-      </table>
-    </div>
-
-    <!-- 📈 TradingView Widget -->
-    <div class="mt-8">
-      <h2 class="text-xl font-semibold mb-2">Live Market Prices</h2>
-      <iframe src="https://www.tradingview.com/widgetembed/?frameElementId=tradingview_c9f43&symbol=BINANCE:BTCUSDT&interval=1&theme=light&style=1&locale=en&toolbar_bg=f1f3f6" width="100%" height="400" frameborder="0"></iframe>
-    </div>
-
-    <!-- 🔁 Exchange Toggle -->
-    <div class="mt-8">
-      <label class="block text-sm font-medium mb-1">Exchange</label>
-      <select id="exchangeSelector" class="border rounded p-2">
-        <option>Binance</option>
-        <option>Kraken</option>
-        <option>Coinbase</option>
-      </select>
-    </div>
-
-    <!-- 🤖 Bot Control Panel -->
-    <div class="card p-4 mt-8 bg-white shadow rounded-xl">
-      <h2 class="text-xl font-semibold mb-4">🤖 Bot Control Panel</h2>
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label>💵 Stake</label>
-          <input type="number" id="stake" class="w-full border rounded p-2" value="50">
-        </div>
-        <div>
-          <label>🎯 Target Profit (%)</label>
-          <input type="number" id="targetProfit" class="w-full border rounded p-2" value="1.5">
-        </div>
-        <div>
-          <label>📉 Min Profit Before Entry (%)</label>
-          <input type="number" id="minProfit" class="w-full border rounded p-2" value="0.5">
-        </div>
-        <div>
-          <label>⏱️ Trade Delay (sec)</label>
-          <input type="number" id="tradeDelay" class="w-full border rounded p-2" value="30">
-        </div>
-        <div>
-          <label>🔁 Trade Mode</label>
-          <select id="tradeMode" class="w-full border rounded p-2">
-            <option value="paper">Paper</option>
-            <option value="real">Live</option>
-          </select>
-        </div>
-      </div>
-      <div class="flex gap-4 mt-4">
-        <button onclick="startBot()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">▶️ Start</button>
-        <button onclick="pauseBot()" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">⏸️ Pause</button>
-        <button onclick="stopBot()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">⏹️ Stop</button>
-      </div>
-    </div>
+    <label style="margin-left:20px">Steps:</label>
+    <input type="number" id="steps" value="1" min="1" max="200" style="width:50px">
+    <button onclick="runBacktest()">▶️ Run</button>
+    <button onclick="resetSim()">🔁 Reset</button>
   </div>
 
-  <script>
-    let chart;
+  <div class="section">
+    <h3>💰 Capital: <span id="capital">$0</span> | 📊 Total PnL: <span id="pnl">$0</span></h3>
+    <p id="btc_stats"></p>
+    <p id="eth_stats"></p>
+    <p id="bnb_stats"></p>
+    <p id="sol_stats"></p>
+  </div>
 
-    function loadChart() {
-      const mode = document.getElementById("modeSelector").value;
-      const type = document.getElementById("chartType").value;
-      axios.get(`/${mode}_growth`).then(res => {
-        const data = res.data;
-        const labels = data.map(d => new Date(d.timestamp).toLocaleDateString());
-        const profits = data.map(d => d.profit);
+  <div class="section">
+    <h3>📋 Live Trades</h3>
+    <table id="log-table"></table>
+  </div>
 
-        if (chart) chart.destroy();
+  <div class="section">
+    <h3>📤 Export Logs</h3>
+    <button onclick="saveLog('btc')">Save BTC</button>
+    <button onclick="saveLog('eth')">Save ETH</button>
+    <button onclick="saveLog('bnb')">Save BNB</button>
+    <button onclick="saveLog('sol')">Save SOL</button>
+  </div>
 
-        chart = new Chart(document.getElementById("performanceChart"), {
-          type: type,
-          data: {
-            labels: labels,
-            datasets: [{
-              label: "Profit",
-              data: profits,
-              backgroundColor: "rgba(75,192,192,0.4)",
-              borderColor: "rgba(75,192,192,1)",
-              fill: true
-            }]
-          }
-        });
-
-        const tbody = document.getElementById("performanceTable");
-        tbody.innerHTML = "";
-        data.forEach(d => {
-          const row = `<tr><td class='border px-4 py-2'>${new Date(d.timestamp).toLocaleDateString()}</td>
-                        <td class='border px-4 py-2'>${d.capital.toFixed(2)}</td>
-                        <td class='border px-4 py-2'>${d.profit.toFixed(2)}</td>
-                        <td class='border px-4 py-2'>${d.trade_count}</td></tr>`;
-          tbody.innerHTML += row;
-        });
-      });
-    }
-
-    function startBot() {
-      fetch('/start_bot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stake: document.getElementById("stake").value,
-          targetProfit: document.getElementById("targetProfit").value,
-          minProfit: document.getElementById("minProfit").value,
-          tradeDelay: document.getElementById("tradeDelay").value,
-          tradeMode: document.getElementById("tradeMode").value
-        })
-      });
-      alert("🚀 Bot started");
-    }
-
-    function pauseBot() {
-      fetch('/pause_bot', { method: 'POST' });
-      alert("⏸️ Bot paused");
-    }
-
-    function stopBot() {
-      fetch('/stop_bot', { method: 'POST' });
-      alert("⏹️ Bot stopped");
-    }
-
-    loadChart();
-  </script>
+  <div class="section" id="charts">
+    <h3>📊 Live Charts</h3>
+    <iframe src="https://www.tradingview.com/widgetembed/?symbol=BINANCE:BTCUSDT&interval=30&theme=dark" width="400" height="300"></iframe>
+    <iframe src="https://www.tradingview.com/widgetembed/?symbol=BINANCE:ETHUSDT&interval=30&theme=dark" width="400" height="300"></iframe>
+    <iframe src="https://www.tradingview.com/widgetembed/?symbol=BINANCE:BNBUSDT&interval=30&theme=dark" width="400" height="300"></iframe>
+    <iframe src="https://www.tradingview.com/widgetembed/?symbol=BINANCE:SOLUSDT&interval=30&theme=dark" width="400" height="300"></iframe>
+  </div>
 </body>
 </html>
