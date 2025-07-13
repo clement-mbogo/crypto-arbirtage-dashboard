@@ -1,30 +1,29 @@
 from flask import Flask, render_template, jsonify, request
 from datetime import datetime
-import random, csv
 from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
+import random, csv
+import os
 
 app = Flask(__name__)
 
-# SQLite DB setup
-engine = create_engine('sqlite:///trades.db')
+# Database setup
 Base = declarative_base()
+db_path = "sqlite:///trades.db"
+engine = create_engine(db_path)
 Session = sessionmaker(bind=engine)
 session = Session()
 
-# Trade model
 class Trade(Base):
     __tablename__ = 'trades'
     id = Column(Integer, primary_key=True)
     coin = Column(String)
     time = Column(DateTime)
-    binance_price = Column(Float)
-    kraken_price = Column(Float)
+    binance = Column(Float)
+    kraken = Column(Float)
     diff = Column(Float)
-    profit = Column(Float)
     action = Column(String)
-    win = Column(Integer)
+    profit = Column(Float)
 
 Base.metadata.create_all(engine)
 
@@ -53,7 +52,6 @@ def arbitrage_logic(coin, base_price, strategy="random", use_ai=False):
 
     profit = 0
     action = "Hold"
-    win = 0
 
     if use_ai:
         total_trades = len(coin_data[coin]["trades"])
@@ -67,28 +65,28 @@ def arbitrage_logic(coin, base_price, strategy="random", use_ai=False):
         capital += profit
         coin_data[coin]["wins"] += 1
         action = f"AI Arb +${profit}" if use_ai else f"Arbitrage +${profit}"
-        win = 1
 
-    now = datetime.now()
     trade = {
-        "time": now.strftime("%H:%M:%S"),
+        "time": datetime.now().strftime("%H:%M:%S"),
         "Binance": binance,
         "Kraken": kraken,
         "Diff": diff,
         "Action": action,
+        "profit": profit
     }
-    coin_data[coin]["trades"].append({**trade, "profit": profit})
 
-    # Save to DB
+    # Save to in-memory
+    coin_data[coin]["trades"].append(trade)
+
+    # Save to database
     db_trade = Trade(
         coin=coin,
-        time=now,
-        binance_price=binance,
-        kraken_price=kraken,
+        time=datetime.now(),
+        binance=binance,
+        kraken=kraken,
         diff=diff,
-        profit=profit,
         action=action,
-        win=win
+        profit=profit
     )
     session.add(db_trade)
     session.commit()
@@ -139,6 +137,29 @@ def get_logs():
         **summaries
     })
 
+@app.route("/get_db_trades")
+def get_db_trades():
+    trades = session.query(Trade).order_by(Trade.id.desc()).limit(50).all()
+    return jsonify([{
+        "coin": t.coin,
+        "time": t.time.strftime("%Y-%m-%d %H:%M:%S"),
+        "binance": t.binance,
+        "kraken": t.kraken,
+        "diff": t.diff,
+        "action": t.action,
+        "profit": t.profit
+    } for t in trades])
+
+@app.route("/export_db")
+def export_db():
+    trades = session.query(Trade).all()
+    with open("all_trades.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["coin", "time", "binance", "kraken", "diff", "action", "profit"])
+        for t in trades:
+            writer.writerow([t.coin, t.time, t.binance, t.kraken, t.diff, t.action, t.profit])
+    return jsonify({"status": "exported to all_trades.csv"})
+
 @app.route("/reset")
 def reset():
     global backtest_logs, simulated_pnl, capital
@@ -147,32 +168,10 @@ def reset():
     backtest_logs = []
     for coin in coins:
         coin_data[coin] = {"pnl": 0.0, "trades": [], "wins": 0}
+
+    session.query(Trade).delete()
+    session.commit()
     return jsonify({"status": "reset"})
-
-def save_log(coin):
-    trades = coin_data[coin]["trades"]
-    if trades:
-        with open(f"{coin.lower()}_log.csv", "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=trades[0].keys())
-            writer.writeheader()
-            writer.writerows(trades)
-    return jsonify({"status": f"{coin} log saved"})
-
-@app.route("/save_btc_log")
-def save_btc_log():
-    return save_log("BTC")
-
-@app.route("/save_eth_log")
-def save_eth_log():
-    return save_log("ETH")
-
-@app.route("/save_bnb_log")
-def save_bnb_log():
-    return save_log("BNB")
-
-@app.route("/save_sol_log")
-def save_sol_log():
-    return save_log("SOL")
 
 if __name__ == "__main__":
     app.run(debug=True)
