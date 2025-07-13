@@ -75,10 +75,8 @@ def arbitrage_logic(coin, base_price, strategy="random", use_ai=False):
         "profit": profit
     }
 
-    # Save to in-memory
     coin_data[coin]["trades"].append(trade)
 
-    # Save to database
     db_trade = Trade(
         coin=coin,
         time=datetime.now(),
