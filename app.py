@@ -75,8 +75,10 @@ def arbitrage_logic(coin, base_price, strategy="random", use_ai=False):
         "profit": profit
     }
 
+    # Save to in-memory
     coin_data[coin]["trades"].append(trade)
 
+    # Save to database
     db_trade = Trade(
         coin=coin,
         time=datetime.now(),
@@ -134,6 +136,20 @@ def get_logs():
         "capital": round(capital, 2),
         **summaries
     })
+
+@app.route("/chart_data")
+def chart_data():
+    trades = session.query(Trade).order_by(Trade.id.asc()).all()
+    result = {}
+    for coin in coins:
+        result[coin] = {
+            "labels": [],
+            "profits": []
+        }
+    for t in trades:
+        result[t.coin]["labels"].append(t.time.strftime("%H:%M:%S"))
+        result[t.coin]["profits"].append(t.profit)
+    return jsonify(result)
 
 @app.route("/get_db_trades")
 def get_db_trades():
