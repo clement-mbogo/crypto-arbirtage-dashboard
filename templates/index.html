@@ -7,7 +7,8 @@
     async function runBacktest() {
       const strategy = document.getElementById('strategy').value;
       const steps = document.getElementById('steps').value;
-      await fetch(`/start_backtest?strategy=${strategy}&steps=${steps}`);
+      const ai = document.getElementById('use_ai').checked;
+      await fetch(`/start_backtest?strategy=${strategy}&steps=${steps}&ai=${ai}`);
       getBacktestLogs();
     }
 
@@ -69,6 +70,11 @@
 
     <label style="margin-left:20px">Steps:</label>
     <input type="number" id="steps" value="1" min="1" max="200" style="width:50px">
+
+    <label style="margin-left:20px">
+      <input type="checkbox" id="use_ai"> 🤖 Use AI
+    </label>
+
     <button onclick="runBacktest()">▶️ Run</button>
     <button onclick="resetSim()">🔁 Reset</button>
   </div>
