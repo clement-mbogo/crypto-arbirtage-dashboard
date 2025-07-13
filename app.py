@@ -1,8 +1,32 @@
 from flask import Flask, render_template, jsonify, request
 from datetime import datetime
-import random, csv, requests
+import random, csv
+from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 app = Flask(__name__)
+
+# SQLite DB setup
+engine = create_engine('sqlite:///trades.db')
+Base = declarative_base()
+Session = sessionmaker(bind=engine)
+session = Session()
+
+# Trade model
+class Trade(Base):
+    __tablename__ = 'trades'
+    id = Column(Integer, primary_key=True)
+    coin = Column(String)
+    time = Column(DateTime)
+    binance_price = Column(Float)
+    kraken_price = Column(Float)
+    diff = Column(Float)
+    profit = Column(Float)
+    action = Column(String)
+    win = Column(Integer)
+
+Base.metadata.create_all(engine)
 
 capital = 1000.0
 simulated_pnl = 0.0
@@ -20,43 +44,16 @@ coin_data = {
 def simulate_price(base=100, spread=3):
     return round(base + random.uniform(-spread, spread), 2)
 
-def get_real_prices(coin):
-    try:
-        coin_symbol = {
-            "BTC": "BTCUSDT",
-            "ETH": "ETHUSDT",
-            "BNB": "BNBUSDT",
-            "SOL": "SOLUSDT"
-        }[coin]
-
-        # Binance price
-        binance_url = f"https://api.binance.com/api/v3/ticker/price?symbol={coin_symbol}"
-        binance_price = float(requests.get(binance_url, timeout=3).json()["price"])
-
-        # Kraken price
-        kraken_symbol = {
-            "BTC": "XBTUSD",
-            "ETH": "ETHUSD",
-            "BNB": "BNBUSD",
-            "SOL": "SOLUSD"
-        }[coin]
-        kraken_url = f"https://api.kraken.com/0/public/Ticker?pair={kraken_symbol}"
-        kraken_data = requests.get(kraken_url, timeout=3).json()
-        kraken_price = float(kraken_data["result"][list(kraken_data["result"].keys())[0]]["c"][0])
-
-        return binance_price, kraken_price
-    except Exception as e:
-        print(f"[ERROR] Price fetch failed: {e}")
-        return simulate_price(), simulate_price()
-
 def arbitrage_logic(coin, base_price, strategy="random", use_ai=False):
     global simulated_pnl, capital
-    binance, kraken = get_real_prices(coin)
+    binance = simulate_price(base_price)
+    kraken = simulate_price(base_price)
     diff = round(abs(binance - kraken), 2)
     threshold = 1.0
 
     profit = 0
     action = "Hold"
+    win = 0
 
     if use_ai:
         total_trades = len(coin_data[coin]["trades"])
@@ -70,15 +67,32 @@ def arbitrage_logic(coin, base_price, strategy="random", use_ai=False):
         capital += profit
         coin_data[coin]["wins"] += 1
         action = f"AI Arb +${profit}" if use_ai else f"Arbitrage +${profit}"
+        win = 1
 
+    now = datetime.now()
     trade = {
-        "time": datetime.now().strftime("%H:%M:%S"),
+        "time": now.strftime("%H:%M:%S"),
         "Binance": binance,
         "Kraken": kraken,
         "Diff": diff,
         "Action": action,
     }
     coin_data[coin]["trades"].append({**trade, "profit": profit})
+
+    # Save to DB
+    db_trade = Trade(
+        coin=coin,
+        time=now,
+        binance_price=binance,
+        kraken_price=kraken,
+        diff=diff,
+        profit=profit,
+        action=action,
+        win=win
+    )
+    session.add(db_trade)
+    session.commit()
+
     return trade
 
 @app.route("/")
@@ -135,7 +149,6 @@ def reset():
         coin_data[coin] = {"pnl": 0.0, "trades": [], "wins": 0}
     return jsonify({"status": "reset"})
 
-# Shared log saving function
 def save_log(coin):
     trades = coin_data[coin]["trades"]
     if trades:
@@ -145,7 +158,6 @@ def save_log(coin):
             writer.writerows(trades)
     return jsonify({"status": f"{coin} log saved"})
 
-# Individual routes for each coin
 @app.route("/save_btc_log")
 def save_btc_log():
     return save_log("BTC")
