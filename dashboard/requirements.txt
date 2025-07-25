@@ -22,4 +22,9 @@ gunicorn
 requests
 python-dotenv
 python-binance
+flask
+sqlalchemy
+python-dotenv
+requests
+
 
