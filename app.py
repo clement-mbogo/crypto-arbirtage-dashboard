@@ -1,191 +1,113 @@
-from flask import Flask, render_template, jsonify, request
-from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime
-from sqlalchemy.orm import sessionmaker, declarative_base
-import random, csv
+# app.py
+from flask import Flask, jsonify
+from scheduler import start_scheduler
 import os
 
 app = Flask(__name__)
 
-# Database setup
-Base = declarative_base()
-db_path = "sqlite:///trades.db"
-engine = create_engine(db_path)
-Session = sessionmaker(bind=engine)
-session = Session()
+@app.route('/')
+def home():
+    return "Binance Arbitrage Bot Running"
 
-class Trade(Base):
-    __tablename__ = 'trades'
-    id = Column(Integer, primary_key=True)
-    coin = Column(String)
-    time = Column(DateTime)
-    binance = Column(Float)
-    kraken = Column(Float)
-    diff = Column(Float)
-    action = Column(String)
-    profit = Column(Float)
+if __name__ == '__main__':
+    start_scheduler()
+    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
 
-Base.metadata.create_all(engine)
 
-capital = 1000.0
-simulated_pnl = 0.0
-backtest_logs = []
+# trade_executor.py
+from binance_utils import load_binance_client
+from telegram_alert import send_telegram_message
+import os
 
-coins = ["BTC", "ETH", "BNB", "SOL"]
+PAPER_TRADING = os.getenv("PAPER_TRADING", "true").lower() == "true"
 
-coin_data = {
-    "BTC": {"pnl": 0.0, "trades": [], "wins": 0},
-    "ETH": {"pnl": 0.0, "trades": [], "wins": 0},
-    "BNB": {"pnl": 0.0, "trades": [], "wins": 0},
-    "SOL": {"pnl": 0.0, "trades": [], "wins": 0},
+# Dummy balance store for paper trades
+virtual_balances = {}
+
+def execute_trade(symbol, side, quantity):
+    if PAPER_TRADING:
+        virtual_balances[symbol] = virtual_balances.get(symbol, 0) + (quantity if side == 'BUY' else -quantity)
+        msg = f"[PAPER] {side} {quantity} of {symbol}. New virtual balance: {virtual_balances[symbol]:.4f}"
+        send_telegram_message(msg)
+        return {"paper_trade": True, "symbol": symbol, "side": side, "quantity": quantity}
+
+    client = load_binance_client()
+    try:
+        order = client.create_order(
+            symbol=symbol,
+            side=side.upper(),
+            type='MARKET',
+            quantity=quantity
+        )
+        send_telegram_message(f"Executed {side} order on {symbol} for {quantity}")
+        return order
+    except Exception as e:
+        send_telegram_message(f"Trade error: {str(e)}")
+        return {"error": str(e)}
+
+
+# arbitrage.py
+from trade_executor import execute_trade
+from binance_utils import load_binance_client
+
+THRESHOLD = 0.5  # % gain
+
+def find_arbitrage_opportunity():
+    client = load_binance_client()
+    tickers = client.get_all_tickers()
+    for ticker in tickers:
+        symbol = ticker['symbol']
+        price = float(ticker['price'])
+        if 'BTC' in symbol and price > 100:
+            execute_trade(symbol, 'BUY', 0.001)
+
+
+# telegram_alert.py
+import requests
+
+TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN"
+TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
+
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {'chat_id': TELEGRAM_CHAT_ID, 'text': message}
+    requests.post(url, data=payload)
+
+
+# scheduler.py
+from apscheduler.schedulers.background import BackgroundScheduler
+from arbitrage import find_arbitrage_opportunity
+
+def start_scheduler():
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(find_arbitrage_opportunity, 'interval', seconds=60)
+    scheduler.start()
+
+
+# binance_utils.py
+from binance.client import Client
+import os
+
+def load_binance_client():
+    api_key = os.getenv('BINANCE_API_KEY')
+    api_secret = os.getenv('BINANCE_API_SECRET')
+    return Client(api_key, api_secret)
+
+
+# settings.json
+{
+  "stake_percentage": 10,
+  "trade_interval": 60,
+  "threshold": 0.5
 }
 
-def simulate_price(base=100, spread=3):
-    return round(base + random.uniform(-spread, spread), 2)
 
-def arbitrage_logic(coin, base_price, strategy="random", use_ai=False):
-    global simulated_pnl, capital
-    binance = simulate_price(base_price)
-    kraken = simulate_price(base_price)
-    diff = round(abs(binance - kraken), 2)
-    threshold = 1.0
+# requirements.txt
+flask
+python-binance
+apscheduler
+requests
 
-    profit = 0
-    action = "Hold"
 
-    if use_ai:
-        total_trades = len(coin_data[coin]["trades"])
-        win_rate = (coin_data[coin]["wins"] / total_trades) * 100 if total_trades else 0
-        threshold = 0.75 if win_rate > 60 else 1.2
-
-    if diff > threshold:
-        profit = round(diff * 0.5, 2)
-        simulated_pnl += profit
-        coin_data[coin]["pnl"] += profit
-        capital += profit
-        coin_data[coin]["wins"] += 1
-        action = f"AI Arb +${profit}" if use_ai else f"Arbitrage +${profit}"
-
-    trade = {
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "Binance": binance,
-        "Kraken": kraken,
-        "Diff": diff,
-        "Action": action,
-        "profit": profit
-    }
-
-    # Save to in-memory
-    coin_data[coin]["trades"].append(trade)
-
-    # Save to database
-    db_trade = Trade(
-        coin=coin,
-        time=datetime.now(),
-        binance=binance,
-        kraken=kraken,
-        diff=diff,
-        action=action,
-        profit=profit
-    )
-    session.add(db_trade)
-    session.commit()
-
-    return trade
-
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-@app.route("/start_backtest")
-def run_backtest():
-    base_prices = {"BTC": 29000, "ETH": 1900, "BNB": 250, "SOL": 70}
-    strategy = request.args.get("strategy", "random")
-    steps = int(request.args.get("steps", 1))
-    use_ai = request.args.get("ai", "false").lower() == "true"
-
-    for _ in range(steps):
-        row = {"time": datetime.now().strftime("%H:%M:%S")}
-        for coin in coins:
-            t = arbitrage_logic(coin, base_prices[coin], strategy=strategy, use_ai=use_ai)
-            for k, v in t.items():
-                row[f"{coin}_{k}"] = v
-        backtest_logs.append(row)
-
-    return jsonify({"status": "running"})
-
-@app.route("/get_backtest_logs")
-def get_logs():
-    summaries = {}
-    for coin in coins:
-        trades = coin_data[coin]["trades"]
-        pnl = coin_data[coin]["pnl"]
-        wins = coin_data[coin]["wins"]
-        summaries[f"{coin.lower()}_summary"] = {
-            "trades": len(trades),
-            "wins": wins,
-            "win_rate": round((wins / len(trades)) * 100, 2) if trades else 0,
-            "total": round(pnl, 2),
-            "avg": round(pnl / len(trades), 2) if trades else 0,
-        }
-        summaries[f"{coin.lower()}_pnl"] = round(pnl, 2)
-
-    return jsonify({
-        "logs": backtest_logs[-20:],
-        "pnl": round(simulated_pnl, 2),
-        "capital": round(capital, 2),
-        **summaries
-    })
-
-@app.route("/chart_data")
-def chart_data():
-    trades = session.query(Trade).order_by(Trade.id.asc()).all()
-    result = {}
-    for coin in coins:
-        result[coin] = {
-            "labels": [],
-            "profits": []
-        }
-    for t in trades:
-        result[t.coin]["labels"].append(t.time.strftime("%H:%M:%S"))
-        result[t.coin]["profits"].append(t.profit)
-    return jsonify(result)
-
-@app.route("/get_db_trades")
-def get_db_trades():
-    trades = session.query(Trade).order_by(Trade.id.desc()).limit(50).all()
-    return jsonify([{
-        "coin": t.coin,
-        "time": t.time.strftime("%Y-%m-%d %H:%M:%S"),
-        "binance": t.binance,
-        "kraken": t.kraken,
-        "diff": t.diff,
-        "action": t.action,
-        "profit": t.profit
-    } for t in trades])
-
-@app.route("/export_db")
-def export_db():
-    trades = session.query(Trade).all()
-    with open("all_trades.csv", "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["coin", "time", "binance", "kraken", "diff", "action", "profit"])
-        for t in trades:
-            writer.writerow([t.coin, t.time, t.binance, t.kraken, t.diff, t.action, t.profit])
-    return jsonify({"status": "exported to all_trades.csv"})
-
-@app.route("/reset")
-def reset():
-    global backtest_logs, simulated_pnl, capital
-    simulated_pnl = 0.0
-    capital = 1000.0
-    backtest_logs = []
-    for coin in coins:
-        coin_data[coin] = {"pnl": 0.0, "trades": [], "wins": 0}
-
-    session.query(Trade).delete()
-    session.commit()
-    return jsonify({"status": "reset"})
-
-if __name__ == "__main__":
-    app.run(debug=True)
+# Procfile
+web: python app.py

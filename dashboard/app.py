@@ -1,10 +1,20 @@
 from flask import Flask, render_template, request, jsonify, send_file
+from dotenv import load_dotenv
+import os
 import json
 import sqlite3
 import time
 from binance_utils import load_binance_client, get_balance, place_market_order
 
+# Load .env config
+load_dotenv()
+
+TRADE_MODE = os.getenv("TRADE_MODE", "paper").lower()
+TRADE_SYMBOL = os.getenv("TRADE_SYMBOL", "BTCUSDT")
+TRADE_CAPITAL = float(os.getenv("TRADE_CAPITAL", "100"))
+
 app = Flask(__name__)
+
 DB_FILE = "trades.db"
 SETTINGS_FILE = "settings.json"
 
@@ -18,7 +28,7 @@ def save_settings(data):
     with open(SETTINGS_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-# Initialize Binance
+# Initialize Binance client
 settings = load_settings()
 binance_client = load_binance_client()
 
@@ -47,8 +57,16 @@ def binance_balance():
 
 @app.route("/trade_example")
 def trade_example():
-    result = place_market_order(binance_client, "BTCUSDT", "buy", 0.001)
+    result = place_market_order(binance_client, TRADE_SYMBOL, "buy", 0.001)
     return jsonify(result)
+
+@app.route("/trade_config")
+def trade_config():
+    return jsonify({
+        "mode": TRADE_MODE,
+        "symbol": TRADE_SYMBOL,
+        "capital": TRADE_CAPITAL
+    })
 
 @app.route("/real_growth")
 def real_growth():
