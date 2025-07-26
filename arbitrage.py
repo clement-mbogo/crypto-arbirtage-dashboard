@@ -1,71 +1,37 @@
 import time
-import random
-from binance_utils import place_market_order, load_binance_client
-from backtest_control import is_backtest_mode
-from database import log_trade
-import json
+from utils import fetch_prices
+from notifier import send_telegram_alert
+from database import store_trade
+from backtest_control import is_backtest_enabled
+from settings_manager import get_settings
 
-# Simulate price fetching logic – replace with real logic if needed
-def fetch_prices():
-    # Example mock data
-    return {
-        "BTCUSDT": {
-            "bid": round(random.uniform(29800, 30200), 2),
-            "ask": round(random.uniform(29800, 30200), 2)
-        },
-        "ETHUSDT": {
-            "bid": round(random.uniform(1850, 1900), 2),
-            "ask": round(random.uniform(1850, 1900), 2)
-        }
-    }
+def check_arbitrage_opportunities():
+    settings = get_settings()
+    if not settings.get("arbitrage_enabled", True):
+        return
 
-def find_arbitrage_opportunities(prices):
-    opportunities = []
-    for symbol, data in prices.items():
-        spread = data['ask'] - data['bid']
-        profit_pct = (spread / data['bid']) * 100
-        if profit_pct > 0.4:  # Arbitrage threshold (customize)
-            opportunities.append({
-                "symbol": symbol,
-                "buy": data['bid'],
-                "sell": data['ask'],
-                "profit_pct": round(profit_pct, 2),
-                "timestamp": time.time()
-            })
-    return opportunities
-
-def execute_arbitrage(opportunity, stake_usdt):
-    client = load_binance_client()
-    symbol = opportunity['symbol']
-    quantity = stake_usdt / opportunity['buy']
-    trade_details = {
-        "symbol": symbol,
-        "buy_price": opportunity['buy'],
-        "sell_price": opportunity['sell'],
-        "quantity": round(quantity, 6),
-        "profit_pct": opportunity['profit_pct'],
-        "mode": "backtest" if is_backtest_mode() else "live",
-        "timestamp": time.time()
-    }
-
-    if is_backtest_mode():
-        print(f"[BACKTEST] Simulating trade: {json.dumps(trade_details, indent=2)}")
-    else:
-        try:
-            # Place a real buy (and optionally sell) order
-            place_market_order(symbol, "BUY", quantity)
-            print(f"[LIVE TRADE] Executed BUY order for {symbol}, quantity={quantity}")
-        except Exception as e:
-            print(f"[ERROR] Live trade failed: {e}")
-            return None
-
-    # Log the trade
-    log_trade(trade_details)
-    return trade_details
-
-def run_arbitrage_cycle(stake_usdt):
     prices = fetch_prices()
-    opportunities = find_arbitrage_opportunities(prices)
-    for opp in opportunities:
-        print(f"[ALERT] Arbitrage found: {opp}")
-        execute_arbitrage(opp, stake_usdt)
+    if not prices:
+        return
+
+    # Example arbitrage logic: Buy where price is lowest, sell where price is highest
+    min_exchange = min(prices, key=lambda x: x['price'])
+    max_exchange = max(prices, key=lambda x: x['price'])
+
+    profit_percent = ((max_exchange['price'] - min_exchange['price']) / min_exchange['price']) * 100
+
+    if profit_percent >= settings.get("min_profit_threshold", 0.5):
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+        message = (
+            f"📈 Arbitrage Opportunity\n\n"
+            f"Buy from: {min_exchange['exchange']} at {min_exchange['price']}\n"
+            f"Sell on: {max_exchange['exchange']} at {max_exchange['price']}\n"
+            f"Profit: {profit_percent:.2f}%\n"
+            f"Time: {timestamp}"
+        )
+
+        print("[INFO]", message)
+        send_telegram_alert(message)
+
+        if not is_backtest_enabled():
+            store_trade(min_exchange, max_exchange, profit_percent, timestamp)
