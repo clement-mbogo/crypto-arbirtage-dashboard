@@ -1,37 +1,31 @@
-import time
-from utils import fetch_prices
+from binance_utils import get_price
+from database import save_trade
 from notifier import send_telegram_alert
-from database import store_trade
 from backtest_control import is_backtest_enabled
-from settings_manager import get_settings
 
-def check_arbitrage_opportunities():
-    settings = get_settings()
-    if not settings.get("arbitrage_enabled", True):
-        return
+# Core arbitrage logic
+def check_arbitrage_opportunities(symbols, capital):
+    opportunities = []
 
-    prices = fetch_prices()
-    if not prices:
-        return
+    for symbol in symbols:
+        price = get_price(symbol)
+        if price is None:
+            continue
 
-    # Example arbitrage logic: Buy where price is lowest, sell where price is highest
-    min_exchange = min(prices, key=lambda x: x['price'])
-    max_exchange = max(prices, key=lambda x: x['price'])
+        # Example logic: mock condition to simulate opportunity
+        if price < 100:  # Simulate undervaluation
+            opportunity = {
+                "symbol": symbol,
+                "price": price,
+                "capital": capital,
+                "type": "buy"
+            }
 
-    profit_percent = ((max_exchange['price'] - min_exchange['price']) / min_exchange['price']) * 100
+            # Log or save if not backtesting
+            if not is_backtest_enabled():
+                save_trade(opportunity)
+                send_telegram_alert(f"Arbitrage Opportunity Found: {symbol} at ${price:.2f}")
 
-    if profit_percent >= settings.get("min_profit_threshold", 0.5):
-        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-        message = (
-            f"📈 Arbitrage Opportunity\n\n"
-            f"Buy from: {min_exchange['exchange']} at {min_exchange['price']}\n"
-            f"Sell on: {max_exchange['exchange']} at {max_exchange['price']}\n"
-            f"Profit: {profit_percent:.2f}%\n"
-            f"Time: {timestamp}"
-        )
+            opportunities.append(opportunity)
 
-        print("[INFO]", message)
-        send_telegram_alert(message)
-
-        if not is_backtest_enabled():
-            store_trade(min_exchange, max_exchange, profit_percent, timestamp)
+    return opportunities
