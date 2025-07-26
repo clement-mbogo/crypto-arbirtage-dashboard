@@ -1,8 +1,10 @@
 Flask
 Flask-Mail
+Flask-Cors
 gunicorn
 requests
 python-binance
 python-dotenv
-SQLAlchemy
-flask-cors
+sqlalchemy
+apscheduler
+waitress
