@@ -1,34 +1,49 @@
-import json
 from binance.client import Client
+import os
+from dotenv import load_dotenv
 
-SETTINGS_FILE = "settings.json"
+load_dotenv()
 
-def load_settings():
-    with open(SETTINGS_FILE, "r") as f:
-        return json.load(f)
+api_key = os.getenv("BINANCE_API_KEY")
+api_secret = os.getenv("BINANCE_API_SECRET")
+use_testnet = os.getenv("BINANCE_USE_TESTNET", "true").lower() == "true"
 
 def load_binance_client():
-    settings = load_settings()
-    api_key = settings["binance"]["api_key"]
-    api_secret = settings["binance"]["api_secret"]
-    return Client(api_key, api_secret, testnet=settings["binance"].get("use_testnet", True))
+    if use_testnet:
+        binance_url = "https://testnet.binance.vision"
+        client = Client(api_key, api_secret)
+        client.API_URL = binance_url
+    else:
+        client = Client(api_key, api_secret)
+    return client
 
-def get_balance(client, asset="USDT"):
+client = load_binance_client()
+
+def get_price(symbol):
     try:
-        balance_info = client.get_asset_balance(asset=asset)
-        return float(balance_info["free"])
+        ticker = client.get_symbol_ticker(symbol=symbol)
+        return float(ticker["price"])
     except Exception as e:
-        print("❌ Failed to get balance:", str(e))
-        return 0.0
+        print(f"Error fetching price for {symbol}: {e}")
+        return None
 
-def place_market_order(client, symbol, side, quantity):
+def get_balance(asset):
     try:
-        order = client.order_market(
+        balance = client.get_asset_balance(asset=asset)
+        return float(balance["free"])
+    except Exception as e:
+        print(f"Error fetching balance for {asset}: {e}")
+        return None
+
+def place_market_order(symbol, side, quantity):
+    try:
+        order = client.create_order(
             symbol=symbol,
-            side=side.upper(),
+            side=side,
+            type="MARKET",
             quantity=quantity
         )
         return order
     except Exception as e:
-        print("❌ Order failed:", str(e))
+        print(f"Order failed: {e}")
         return None
