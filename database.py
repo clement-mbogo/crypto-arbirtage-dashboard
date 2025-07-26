@@ -1,54 +1,60 @@
-import os
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
+import sqlite3
 from datetime import datetime
 
-# Load environment variables
-load_dotenv()
+DB_FILE = "trades.db"
 
-# Use SQLite by default
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///arbitrage.db")
-
-engine = create_engine(DATABASE_URL, echo=False)
-SessionLocal = sessionmaker(bind=engine)
-Base = declarative_base()
-
-# --- Trade Model ---
-class Trade(Base):
-    __tablename__ = "trades"
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    symbol = Column(String, nullable=False)
-    buy_exchange = Column(String, nullable=False)
-    sell_exchange = Column(String, nullable=False)
-    buy_price = Column(Float, nullable=False)
-    sell_price = Column(Float, nullable=False)
-    profit_percent = Column(Float, nullable=False)
-    volume = Column(Float, nullable=False)
-    trade_type = Column(String, default="real")  # or "paper"
-
-# --- Performance Model ---
-class Performance(Base):
-    __tablename__ = "performance"
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    capital = Column(Float, nullable=False)
-    profit_percent = Column(Float, nullable=False)
-    trade_count = Column(Integer, default=0)
-
-# --- Alert Model ---
-class Alert(Base):
-    __tablename__ = "alerts"
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    symbol = Column(String, nullable=False)
-    buy_exchange = Column(String, nullable=False)
-    sell_exchange = Column(String, nullable=False)
-    profit_percent = Column(Float, nullable=False)
-    volume = Column(Float, nullable=False)
-
-# --- Init DB ---
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS trades (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT,
+                    price REAL,
+                    quantity REAL,
+                    side TEXT,
+                    timestamp TEXT
+                )''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS performance (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    capital REAL,
+                    profit_percent REAL,
+                    trade_count INTEGER,
+                    timestamp TEXT
+                )''')
+    conn.commit()
+    conn.close()
+
+def save_trade(symbol, price, quantity, side):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    timestamp = datetime.utcnow().isoformat()
+    c.execute("INSERT INTO trades (symbol, price, quantity, side, timestamp) VALUES (?, ?, ?, ?, ?)",
+              (symbol, price, quantity, side, timestamp))
+    conn.commit()
+    conn.close()
+
+def save_performance(capital, profit_percent, trade_count):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    timestamp = datetime.utcnow().isoformat()
+    c.execute("INSERT INTO performance (capital, profit_percent, trade_count, timestamp) VALUES (?, ?, ?, ?)",
+              (capital, profit_percent, trade_count, timestamp))
+    conn.commit()
+    conn.close()
+
+def fetch_performance_data(limit=100):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT * FROM performance ORDER BY id DESC LIMIT ?", (limit,))
+    data = c.fetchall()
+    conn.close()
+    return data[::-1]  # return chronological
+
+def fetch_all_trades():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT * FROM trades ORDER BY id DESC")
+    trades = c.fetchall()
+    conn.close()
+    return trades

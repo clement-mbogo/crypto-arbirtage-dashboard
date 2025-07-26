@@ -1,36 +1,71 @@
-# arbitrage.py
 import time
-from binance.client import Client
-from database import save_trade, update_performance
+import random
+from binance_utils import place_market_order, load_binance_client
+from backtest_control import is_backtest_mode
+from database import log_trade
+import json
 
-def find_arbitrage_opportunity():
-    # Placeholder for actual strategy
+# Simulate price fetching logic – replace with real logic if needed
+def fetch_prices():
+    # Example mock data
     return {
-        "symbol": "BTCUSDT",
-        "action": "buy",
-        "quantity": 0.001
+        "BTCUSDT": {
+            "bid": round(random.uniform(29800, 30200), 2),
+            "ask": round(random.uniform(29800, 30200), 2)
+        },
+        "ETHUSDT": {
+            "bid": round(random.uniform(1850, 1900), 2),
+            "ask": round(random.uniform(1850, 1900), 2)
+        }
     }
 
-def execute_trade(client: Client, trade_info, settings):
-    if settings['mode'] == 'paper':
-        price = float(client.get_symbol_ticker(symbol=trade_info['symbol'])['price'])
-        save_trade(trade_info['symbol'], trade_info['action'], price, trade_info['quantity'], 0)
-        update_performance(price * trade_info['quantity'], 0)
-        return {"message": "Paper trade executed."}
+def find_arbitrage_opportunities(prices):
+    opportunities = []
+    for symbol, data in prices.items():
+        spread = data['ask'] - data['bid']
+        profit_pct = (spread / data['bid']) * 100
+        if profit_pct > 0.4:  # Arbitrage threshold (customize)
+            opportunities.append({
+                "symbol": symbol,
+                "buy": data['bid'],
+                "sell": data['ask'],
+                "profit_pct": round(profit_pct, 2),
+                "timestamp": time.time()
+            })
+    return opportunities
 
-    elif settings['mode'] == 'live':
-        order = client.order_market_buy(
-            symbol=trade_info['symbol'],
-            quantity=trade_info['quantity']
-        ) if trade_info['action'] == 'buy' else client.order_market_sell(
-            symbol=trade_info['symbol'],
-            quantity=trade_info['quantity']
-        )
-        price = float(order['fills'][0]['price'])
-        qty = float(order['executedQty'])
-        save_trade(trade_info['symbol'], trade_info['action'], price, qty, 0)
-        update_performance(price * qty, 0)
-        return {"message": "Live trade executed."}
+def execute_arbitrage(opportunity, stake_usdt):
+    client = load_binance_client()
+    symbol = opportunity['symbol']
+    quantity = stake_usdt / opportunity['buy']
+    trade_details = {
+        "symbol": symbol,
+        "buy_price": opportunity['buy'],
+        "sell_price": opportunity['sell'],
+        "quantity": round(quantity, 6),
+        "profit_pct": opportunity['profit_pct'],
+        "mode": "backtest" if is_backtest_mode() else "live",
+        "timestamp": time.time()
+    }
 
+    if is_backtest_mode():
+        print(f"[BACKTEST] Simulating trade: {json.dumps(trade_details, indent=2)}")
     else:
-        return {"error": "Unknown trading mode"}
+        try:
+            # Place a real buy (and optionally sell) order
+            place_market_order(symbol, "BUY", quantity)
+            print(f"[LIVE TRADE] Executed BUY order for {symbol}, quantity={quantity}")
+        except Exception as e:
+            print(f"[ERROR] Live trade failed: {e}")
+            return None
+
+    # Log the trade
+    log_trade(trade_details)
+    return trade_details
+
+def run_arbitrage_cycle(stake_usdt):
+    prices = fetch_prices()
+    opportunities = find_arbitrage_opportunities(prices)
+    for opp in opportunities:
+        print(f"[ALERT] Arbitrage found: {opp}")
+        execute_arbitrage(opp, stake_usdt)

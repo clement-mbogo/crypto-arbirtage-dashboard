@@ -1,118 +1,122 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Crypto Arbitrage Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; background: #111; color: #eee; padding: 20px; }
-    h1 { color: #0ff; }
-    button { margin: 5px; padding: 8px 14px; font-weight: bold; cursor: pointer; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
-    .summary, .db-trades { background: #222; padding: 10px; border-radius: 8px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #444; padding: 6px; text-align: center; }
-    th { background: #333; }
-    .controls { margin-top: 10px; }
+    body { font-family: sans-serif; padding: 20px; background: #f7f9fc; }
+    h1 { text-align: center; }
+    .container { display: flex; flex-wrap: wrap; gap: 20px; }
+    .chart-box { flex: 1 1 400px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .controls { margin-top: 20px; display: flex; gap: 20px; justify-content: center; }
+    button, select { padding: 10px 15px; border-radius: 8px; border: 1px solid #ccc; }
+    .status { text-align: center; margin-top: 10px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>🚀 Crypto Arbitrage Dashboard</h1>
+  <h1>Crypto Arbitrage Dashboard</h1>
 
   <div class="controls">
-    <label>Steps: <input type="number" id="steps" value="1" min="1" max="100"></label>
-    <label><input type="checkbox" id="ai"> AI Mode</label>
-    <button onclick="startBacktest()">Start Backtest</button>
-    <button onclick="reset()">Reset</button>
-    <button onclick="exportDB()">Export DB CSV</button>
-    <button onclick="loadDBTrades()">Show DB Trades</button>
+    <button onclick="toggleBacktest()">Toggle Backtest</button>
+    <select id="apiMode" onchange="switchMode(this.value)">
+      <option value="live">Live Mode</option>
+      <option value="paper">Paper Mode</option>
+    </select>
   </div>
 
-  <h2>📊 Summary</h2>
-  <div class="grid" id="summary"></div>
+  <div class="status" id="statusText">Loading performance...</div>
 
-  <h2>🧾 Recent Trades (In-Memory)</h2>
-  <div class="summary">
-    <table id="log-table">
-      <thead></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <h2>📦 Last 50 Trades (From DB)</h2>
-  <div class="db-trades">
-    <table id="db-table">
-      <thead>
-        <tr>
-          <th>Time</th><th>Coin</th><th>Binance</th><th>Kraken</th>
-          <th>Diff</th><th>Action</th><th>Profit</th>
-        </tr>
-      </thead>
-      <tbody id="db-body"></tbody>
-    </table>
+  <div class="container">
+    <div class="chart-box">
+      <canvas id="capitalChart"></canvas>
+    </div>
+    <div class="chart-box">
+      <canvas id="profitChart"></canvas>
+    </div>
+    <div class="chart-box">
+      <canvas id="tradesChart"></canvas>
+    </div>
   </div>
 
   <script>
-    async function startBacktest() {
-      const steps = document.getElementById("steps").value;
-      const ai = document.getElementById("ai").checked;
-      await axios.get(`/start_backtest?steps=${steps}&ai=${ai}`);
-      loadLogs();
+    let capitalChart, profitChart, tradesChart;
+
+    async function fetchPerformance() {
+      const res = await fetch("/api/performance");
+      const data = await res.json();
+
+      updateCharts(data.timestamps, data.capitals, data.profit_percents, data.trade_counts);
+      document.getElementById("statusText").textContent = `Current Profit: ${data.profit_percents.at(-1)}% | Trades: ${data.trade_counts.length}`;
     }
 
-    async function loadLogs() {
-      const res = await axios.get("/get_backtest_logs");
-      const logs = res.data.logs;
-      const summary = document.getElementById("summary");
-      const head = document.querySelector("#log-table thead");
-      const body = document.querySelector("#log-table tbody");
+    function updateCharts(labels, capitals, profits, trades) {
+      const labelDates = labels.map(ts => new Date(ts * 1000).toLocaleTimeString());
 
-      // Summary
-      summary.innerHTML = '';
-      ["btc", "eth", "bnb", "sol"].forEach(coin => {
-        const d = res.data[`${coin}_summary`];
-        summary.innerHTML += `
-          <div><strong>${coin.toUpperCase()}</strong><br>
-          Trades: ${d.trades}<br>Wins: ${d.wins}<br>
-          Win %: ${d.win_rate}%<br>PNL: $${d.total}</div>
-        `;
-      });
+      if (!capitalChart) {
+        const ctx1 = document.getElementById("capitalChart").getContext("2d");
+        capitalChart = new Chart(ctx1, {
+          type: "line",
+          data: {
+            labels: labelDates,
+            datasets: [{ label: "Capital ($)", data: capitals, borderColor: "blue", fill: false }]
+          }
+        });
+      } else {
+        capitalChart.data.labels = labelDates;
+        capitalChart.data.datasets[0].data = capitals;
+        capitalChart.update();
+      }
 
-      // Table
-      if (logs.length) {
-        const keys = Object.keys(logs[0]);
-        head.innerHTML = `<tr>${keys.map(k => `<th>${k}</th>`).join("")}</tr>`;
-        body.innerHTML = logs.map(row =>
-          `<tr>${keys.map(k => `<td>${row[k]}</td>`).join("")}</tr>`
-        ).join("");
+      if (!profitChart) {
+        const ctx2 = document.getElementById("profitChart").getContext("2d");
+        profitChart = new Chart(ctx2, {
+          type: "line",
+          data: {
+            labels: labelDates,
+            datasets: [{ label: "Profit %", data: profits, borderColor: "green", fill: false }]
+          }
+        });
+      } else {
+        profitChart.data.labels = labelDates;
+        profitChart.data.datasets[0].data = profits;
+        profitChart.update();
+      }
+
+      if (!tradesChart) {
+        const ctx3 = document.getElementById("tradesChart").getContext("2d");
+        tradesChart = new Chart(ctx3, {
+          type: "line",
+          data: {
+            labels: labelDates,
+            datasets: [{ label: "Trades", data: trades, borderColor: "orange", fill: false }]
+          }
+        });
+      } else {
+        tradesChart.data.labels = labelDates;
+        tradesChart.data.datasets[0].data = trades;
+        tradesChart.update();
       }
     }
 
-    async function reset() {
-      await axios.get("/reset");
-      document.querySelector("#log-table tbody").innerHTML = "";
-      document.querySelector("#summary").innerHTML = "";
-      document.querySelector("#db-body").innerHTML = "";
+    async function toggleBacktest() {
+      const res = await fetch("/api/toggle_backtest", { method: "POST" });
+      const json = await res.json();
+      alert(`Backtest mode is now ${json.status}`);
     }
 
-    async function exportDB() {
-      const res = await axios.get("/export_db");
-      alert(res.data.status);
+    async function switchMode(mode) {
+      const res = await fetch("/api/switch_mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode })
+      });
+      const json = await res.json();
+      alert(json.status);
     }
 
-    async function loadDBTrades() {
-      const res = await axios.get("/get_db_trades");
-      const rows = res.data;
-      const body = document.getElementById("db-body");
-      body.innerHTML = rows.map(t => `
-        <tr>
-          <td>${t.time}</td><td>${t.coin}</td><td>${t.binance}</td>
-          <td>${t.kraken}</td><td>${t.diff}</td><td>${t.action}</td>
-          <td>${t.profit}</td>
-        </tr>`).join("");
-    }
-
-    loadLogs(); // auto-load on start
+    fetchPerformance();
+    setInterval(fetchPerformance, 6000); // Refresh every 6 seconds
   </script>
 </body>
 </html>
