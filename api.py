@@ -1,5 +1,3 @@
-# api.py
-
 from flask import Flask, jsonify
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
@@ -14,7 +12,6 @@ app = Flask(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///arbitrage.db")
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
-
 
 @app.route("/api/trades")
 def get_all_trades():
@@ -38,11 +35,9 @@ def get_all_trades():
     session.close()
     return jsonify(result)
 
-
 @app.route("/api/health")
 def health_check():
     return jsonify({"status": "ok"})
-
 
 if __name__ == "__main__":
     app.run(debug=True, port=8000)
