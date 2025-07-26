@@ -1,31 +1,22 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from database import Trade
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
-# Initialize Flask app
-app = Flask(__name__, template_folder="templates")
+app = Flask(__name__)
 
-# Set up database
+# Database setup
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///arbitrage.db")
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
 @app.route("/")
-def home():
-    return "✅ Crypto Arbitrage Dashboard is running!"
-
-    # OR if using HTML template:
-    # return render_template("index.html")
-
-@app.route("/api/health")
-def health_check():
-    return jsonify({"status": "ok"})
+def index():
+    return jsonify({"message": "Crypto Arbitrage Dashboard API is live"}), 200
 
 @app.route("/api/trades")
 def get_all_trades():
@@ -49,5 +40,9 @@ def get_all_trades():
     session.close()
     return jsonify(result)
 
+@app.route("/api/health")
+def health_check():
+    return jsonify({"status": "ok"})
+
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=8000)
+    app.run(debug=True, port=8000)
