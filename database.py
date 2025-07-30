@@ -63,3 +63,19 @@ def fetch_performance_data():
     data = cursor.fetchall()
     conn.close()
     return data
+def get_trade_count():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM trades")
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
+def get_current_capital():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT capital FROM performance ORDER BY timestamp DESC LIMIT 1")
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else 1000.0  # Default fallback capital
+
