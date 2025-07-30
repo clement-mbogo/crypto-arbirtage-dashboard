@@ -18,7 +18,7 @@ from database import (
 )
 from performance import fetch_performance_history
 from notifier import send_telegram_message
-from scheduler import run_scheduler
+from scheduler import start_scheduler  # ✅ FIXED HERE
 from backtest_control import toggle_backtest, is_backtest_enabled
 
 # Load env
@@ -85,7 +85,6 @@ def api_performance():
 @app.route("/api/performance/history", methods=["GET"])
 @require_auth
 def api_performance_history():
-    # Optional limit query param
     limit = int(request.args.get("limit", 100))
     return jsonify(fetch_performance_history(limit))
 
@@ -126,8 +125,8 @@ def api_download_trades():
         "Content-Disposition": "attachment; filename=trades.csv"
     })
 
-# Start scheduler in background
-Thread(target=run_scheduler, daemon=True).start()
+# ✅ Start scheduler
+Thread(target=start_scheduler, daemon=True).start()
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000, use_reloader=False)
