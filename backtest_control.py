@@ -1,23 +1,29 @@
 import json
+import os
 
 SETTINGS_FILE = "settings.json"
 
-def is_backtest_enabled():
-    try:
-        with open(SETTINGS_FILE, "r") as f:
-            settings = json.load(f)
-        return settings.get("backtest", False)
-    except Exception as e:
-        print("❌ Could not read backtest status:", str(e))
-        return False
+# Load current settings
+def load_settings():
+    if not os.path.exists(SETTINGS_FILE):
+        return {"backtest": False}
+    
+    with open(SETTINGS_FILE, "r") as f:
+        return json.load(f)
 
-def set_backtest_enabled(value: bool):
-    try:
-        with open(SETTINGS_FILE, "r") as f:
-            settings = json.load(f)
-        settings["backtest"] = value
-        with open(SETTINGS_FILE, "w") as f:
-            json.dump(settings, f, indent=2)
-        print(f"✅ Backtest set to {value}")
-    except Exception as e:
-        print("❌ Failed to update backtest setting:", str(e))
+# Save updated settings
+def save_settings(settings):
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(settings, f, indent=4)
+
+# Enable or disable backtest mode
+def toggle_backtest():
+    settings = load_settings()
+    settings["backtest"] = not settings.get("backtest", False)
+    save_settings(settings)
+    return settings["backtest"]
+
+# Check if backtest mode is enabled
+def is_backtest_enabled():
+    settings = load_settings()
+    return settings.get("backtest", False)

@@ -1,28 +1,47 @@
 # notifier.py
 
-import requests
 import os
-from dotenv import load_dotenv
+import json
+import logging
+import requests
 
-load_dotenv()
-
+# Load bot credentials from environment or settings.json
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TG_CHAT_ID")
+CONFIG_FILE = "settings.json"
 
-def send_telegram_alert(message: str):
+def _load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def send_telegram_message(message: str):
+    """
+    Send a message via Telegram Bot API.
+    Falls back to settings.json if env vars are missing.
+    """
+    global TG_BOT_TOKEN, TG_CHAT_ID
+
     if not TG_BOT_TOKEN or not TG_CHAT_ID:
-        print("Telegram token or chat ID not set.")
+        cfg = _load_config()
+        TG_BOT_TOKEN = TG_BOT_TOKEN or cfg.get("TG_BOT_TOKEN")
+        TG_CHAT_ID = TG_CHAT_ID or cfg.get("TG_CHAT_ID")
+
+    if not TG_BOT_TOKEN or not TG_CHAT_ID:
+        logging.warning("Telegram credentials not set; cannot send message.")
         return
 
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
-    data = {
+    payload = {
         "chat_id": TG_CHAT_ID,
         "text": message,
-        "parse_mode": "HTML"
+        "parse_mode": "Markdown"
     }
 
     try:
-        response = requests.post(url, data=data)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        print(f"Error sending Telegram alert: {e}")
+        resp = requests.post(url, json=payload, timeout=10)
+        resp.raise_for_status()
+        logging.info("Telegram message sent.")
+    except Exception as e:
+        logging.error(f"Failed to send Telegram message: {e}")

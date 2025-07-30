@@ -1,0 +1,72 @@
+openapi: 3.0.0
+info:
+  title: Crypto Arbitrage API
+  version: "1.0"
+paths:
+  /api/performance:
+    get:
+      summary: Get performance chart data
+      responses:
+        '200':
+          description: OK
+  /api/trades:
+    get:
+      summary: Get recent trades
+      responses:
+        '200':
+          description: OK
+  /api/arbitrage:
+    get:
+      summary: Check arbitrage opportunities
+      responses:
+        '200':
+          description: OK
+  /api/execute_trade:
+    post:
+      summary: Execute market trade on Binance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                side:
+                  type: string
+                quantity:
+                  type: number
+      responses:
+        '200':
+          description: Trade executed
+  /api/toggle_backtest:
+    post:
+      summary: Toggle backtest mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Toggled backtest mode
+  /api/alerts:
+    post:
+      summary: Send a Telegram alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      responses:
+        '200':
+          description: Alert sent

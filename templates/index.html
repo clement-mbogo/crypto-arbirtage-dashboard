@@ -5,118 +5,101 @@
   <title>Crypto Arbitrage Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #f7f9fc; }
-    h1 { text-align: center; }
-    .container { display: flex; flex-wrap: wrap; gap: 20px; }
-    .chart-box { flex: 1 1 400px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-    .controls { margin-top: 20px; display: flex; gap: 20px; justify-content: center; }
-    button, select { padding: 10px 15px; border-radius: 8px; border: 1px solid #ccc; }
-    .status { text-align: center; margin-top: 10px; font-weight: bold; }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .card { padding: 20px; margin: 10px 0; border: 1px solid #ccc; border-radius: 10px; }
+    #charts { display: flex; gap: 20px; flex-wrap: wrap; }
+    canvas { background: #fff; border-radius: 10px; }
+    button { padding: 10px; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <h1>Crypto Arbitrage Dashboard</h1>
+  <h1>📈 Crypto Arbitrage Dashboard</h1>
 
-  <div class="controls">
-    <button onclick="toggleBacktest()">Toggle Backtest</button>
-    <select id="apiMode" onchange="switchMode(this.value)">
-      <option value="live">Live Mode</option>
-      <option value="paper">Paper Mode</option>
-    </select>
+  <div class="card">
+    <label>
+      <input type="checkbox" id="backtestToggle" />
+      Enable Backtest Mode
+    </label>
   </div>
 
-  <div class="status" id="statusText">Loading performance...</div>
-
-  <div class="container">
-    <div class="chart-box">
-      <canvas id="capitalChart"></canvas>
+  <div id="charts">
+    <div>
+      <h3>Capital Over Time</h3>
+      <canvas id="capitalChart" width="400" height="200"></canvas>
     </div>
-    <div class="chart-box">
-      <canvas id="profitChart"></canvas>
+    <div>
+      <h3>Profit % Over Time</h3>
+      <canvas id="profitChart" width="400" height="200"></canvas>
     </div>
-    <div class="chart-box">
-      <canvas id="tradesChart"></canvas>
+    <div>
+      <h3>Trades Count</h3>
+      <canvas id="tradeChart" width="400" height="200"></canvas>
     </div>
   </div>
 
   <script>
-    let capitalChart, profitChart, tradesChart;
-
     async function fetchPerformance() {
-      const res = await fetch("/api/performance");
-      const data = await res.json();
-
-      updateCharts(data.timestamps, data.capitals, data.profit_percents, data.trade_counts);
-      document.getElementById("statusText").textContent = `Current Profit: ${data.profit_percents.at(-1)}% | Trades: ${data.trade_counts.length}`;
+      const res = await fetch('/api/performance');
+      return res.json();
     }
 
-    function updateCharts(labels, capitals, profits, trades) {
-      const labelDates = labels.map(ts => new Date(ts * 1000).toLocaleTimeString());
+    async function updateCharts() {
+      const data = await fetchPerformance();
+      const labels = data.timestamps;
 
-      if (!capitalChart) {
-        const ctx1 = document.getElementById("capitalChart").getContext("2d");
-        capitalChart = new Chart(ctx1, {
-          type: "line",
-          data: {
-            labels: labelDates,
-            datasets: [{ label: "Capital ($)", data: capitals, borderColor: "blue", fill: false }]
-          }
-        });
-      } else {
-        capitalChart.data.labels = labelDates;
-        capitalChart.data.datasets[0].data = capitals;
-        capitalChart.update();
-      }
+      capitalChart.data.labels = labels;
+      capitalChart.data.datasets[0].data = data.capital;
+      profitChart.data.labels = labels;
+      profitChart.data.datasets[0].data = data.profit_percent;
+      tradeChart.data.labels = labels;
+      tradeChart.data.datasets[0].data = data.trade_count;
 
-      if (!profitChart) {
-        const ctx2 = document.getElementById("profitChart").getContext("2d");
-        profitChart = new Chart(ctx2, {
-          type: "line",
-          data: {
-            labels: labelDates,
-            datasets: [{ label: "Profit %", data: profits, borderColor: "green", fill: false }]
-          }
-        });
-      } else {
-        profitChart.data.labels = labelDates;
-        profitChart.data.datasets[0].data = profits;
-        profitChart.update();
-      }
-
-      if (!tradesChart) {
-        const ctx3 = document.getElementById("tradesChart").getContext("2d");
-        tradesChart = new Chart(ctx3, {
-          type: "line",
-          data: {
-            labels: labelDates,
-            datasets: [{ label: "Trades", data: trades, borderColor: "orange", fill: false }]
-          }
-        });
-      } else {
-        tradesChart.data.labels = labelDates;
-        tradesChart.data.datasets[0].data = trades;
-        tradesChart.update();
-      }
+      capitalChart.update();
+      profitChart.update();
+      tradeChart.update();
     }
 
-    async function toggleBacktest() {
-      const res = await fetch("/api/toggle_backtest", { method: "POST" });
+    async function initBacktestToggle() {
+      const res = await fetch('/api/check_backtest');
       const json = await res.json();
-      alert(`Backtest mode is now ${json.status}`);
-    }
+      document.getElementById('backtestToggle').checked = json.backtest_enabled;
 
-    async function switchMode(mode) {
-      const res = await fetch("/api/switch_mode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode })
+      document.getElementById('backtestToggle').addEventListener('change', async (e) => {
+        await fetch('/api/toggle_backtest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: e.target.checked })
+        });
       });
-      const json = await res.json();
-      alert(json.status);
     }
 
-    fetchPerformance();
-    setInterval(fetchPerformance, 6000); // Refresh every 6 seconds
+    const capitalChart = new Chart(document.getElementById('capitalChart'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{ label: 'Capital ($)', data: [], borderColor: 'green', fill: false }]
+      }
+    });
+
+    const profitChart = new Chart(document.getElementById('profitChart'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{ label: 'Profit %', data: [], borderColor: 'blue', fill: false }]
+      }
+    });
+
+    const tradeChart = new Chart(document.getElementById('tradeChart'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{ label: 'Trades', data: [], borderColor: 'orange', fill: false }]
+      }
+    });
+
+    initBacktestToggle();
+    updateCharts();
+    setInterval(updateCharts, 10000); // update every 10s
   </script>
 </body>
 </html>

@@ -1,34 +1,19 @@
-import requests
+# utils.py
 
-EXCHANGES = [
-    {"name": "Binance", "url": "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"},
-    {"name": "Coinbase", "url": "https://api.coinbase.com/v2/prices/spot?currency=USD"},
-    {"name": "Kraken", "url": "https://api.kraken.com/0/public/Ticker?pair=XBTUSD"},
-]
+import datetime
+import pytz
 
-def fetch_prices():
-    prices = []
-    for exchange in EXCHANGES:
-        try:
-            if exchange["name"] == "Binance":
-                response = requests.get(exchange["url"])
-                data = response.json()
-                price = float(data["price"])
-            elif exchange["name"] == "Coinbase":
-                response = requests.get(exchange["url"])
-                data = response.json()
-                price = float(data["data"]["amount"])
-            elif exchange["name"] == "Kraken":
-                response = requests.get(exchange["url"])
-                data = response.json()
-                price = float(data["result"]["XXBTZUSD"]["c"][0])
-            else:
-                continue
+def get_current_time():
+    return datetime.datetime.now(pytz.timezone("Africa/Nairobi")).strftime("%Y-%m-%d %H:%M:%S")
 
-            prices.append({
-                "exchange": exchange["name"],
-                "price": price
-            })
-        except Exception as e:
-            print(f"[ERROR] Failed to fetch from {exchange['name']}: {e}")
-    return prices
+def format_currency(value):
+    try:
+        return f"${float(value):,.2f}"
+    except:
+        return "$0.00"
+
+def percentage(part, whole):
+    try:
+        return round((float(part) / float(whole)) * 100, 2)
+    except ZeroDivisionError:
+        return 0.0

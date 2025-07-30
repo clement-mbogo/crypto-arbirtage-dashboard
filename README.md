@@ -1,4 +1,4 @@
-# Crypto Arbitrage Dashboard
+# 🧠 Crypto Arbitrage Dashboard
 
 A Flask-based crypto arbitrage monitoring and trading system with live performance tracking, backtesting, Telegram alerts, and a frontend dashboard.
 
